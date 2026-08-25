@@ -166,6 +166,8 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 rclone_remote=config.get("RCLONE_REMOTE"),
                 source_folder_url=source_url,
                 dest_folder_name=dest_folder_name,
+                source_url_input=source_url,
+                dest_input=dest_input,
             )
         except ConfigError as e:
             return False, str(e)

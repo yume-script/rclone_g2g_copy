@@ -25,6 +25,7 @@
   const logDest = container.querySelector('[data-role="log-dest"]');
 
   let mountPrefix = '';
+  let inputsPrefilled = false;
 
   const STATUS_LABEL = {
     success: '완료',
@@ -113,6 +114,20 @@
       logDest.textContent = '';
       setRunningUI(false);
       return;
+    }
+
+    // 화면을 새로 열었을 때(또는 새로고침) 이미 진행 중이거나 방금 끝난 job이
+    // 있으면, 사용자가 입력했던 원본 값(변환 전)을 그대로 입력창에 복원한다.
+    // 딱 한 번만 채우고, 이후에는 사용자가 직접 수정한 값을 건드리지 않는다.
+    if (!inputsPrefilled) {
+      inputsPrefilled = true;
+      if (job.source_url_input && !sourceInput.value) {
+        sourceInput.value = job.source_url_input;
+      }
+      if (job.dest_input && !destInput.value) {
+        destInput.value = job.dest_input;
+      }
+      updateDestPreview();
     }
     logDest.textContent = job.dest_path ? `→ ${job.dest_path}` : '';
     appendLines(job.lines);

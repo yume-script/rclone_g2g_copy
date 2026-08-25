@@ -253,10 +253,15 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
     _update_state(status=status, returncode=returncode, finished_at=time.time(), pid=None)
 
 
-def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, dest_folder_name):
+def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, dest_folder_name,
+                    source_url_input=None, dest_input=None):
     """
     유효성 검사 후 백그라운드 스레드로 rclone copy를 시작합니다.
     이미 실행 중인(그리고 실제로 살아있는) job이 있으면 거부합니다.
+
+    source_url_input / dest_input: 변환 전, 사용자가 화면에 실제로 타이핑한 원본
+    값(소스는 URL 그대로, 목적지는 마운트 경로일 수도 있는 원본). 새로고침 시
+    입력창을 그대로 복원해주기 위해 job 상태에 함께 저장한다.
     """
     rclone_path = (rclone_path or "").strip()
     config_path = (config_path or "").strip()
@@ -287,6 +292,9 @@ def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, d
         "finished_at": None,
         "source_id": source_id,
         "dest_path": f"{rclone_remote}:{dest_folder_name}",
+        # 새로고침 시 입력창 복원용 원본 값
+        "source_url_input": (source_url_input or source_folder_url or "").strip(),
+        "dest_input": (dest_input or dest_folder_name or "").strip(),
     })
 
     thread = threading.Thread(
