@@ -37,6 +37,7 @@ import signal
 import subprocess
 import threading
 import time
+import urllib.request
 import uuid
 
 PLUGIN_ID = "rclone_g2g_copy"
@@ -216,11 +217,31 @@ def _process_is_alive(pid):
     return True
 
 
+def _notify_discord(webhook_url, content):
+    """복사 완료/실패/중단 시 디스코드 웹훅으로 알림을 보낸다.
+    표준 라이브러리(urllib)만 쓰고, 실패해도 job 진행/결과 자체에는 영향을
+    주지 않도록 예외를 삼킨다 (알림 실패로 job이 죽으면 안 되므로)."""
+    webhook_url = (webhook_url or "").strip()
+    if not webhook_url:
+        return
+    try:
+        body = json.dumps({"content": content}).encode("utf-8")
+        req = urllib.request.Request(
+            webhook_url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:  # noqa: BLE001 - 알림 실패는 조용히 로그만
+        _append_log_line(f"[!] 디스코드 알림 전송 실패: {e}")
+
+
 # ---------------------------------------------------------------------------
 # 실행
 # ---------------------------------------------------------------------------
 
-def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name):
+def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name, discord_webhook_url=None):
     source_path = f"{rclone_remote},root_folder_id={source_id}:"
     dest_path = f"{rclone_remote}:{dest_folder_name}"
 
@@ -272,18 +293,22 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
     if cancelled:
         status = "cancelled"
         _append_log_line("\n[-] 사용자 요청으로 복사가 중단되었습니다.")
+        notify_text = f"⏹️ **[BookOasis] 폴더 복사 중단됨**\n목적지: `{dest_path}`"
     elif returncode == 0:
         status = "success"
         _append_log_line("\n[+] 서버사이드 복사가 성공적으로 완료되었습니다!")
+        notify_text = f"✅ **[BookOasis] 폴더 복사 완료**\n목적지: `{dest_path}`"
     else:
         status = "error"
         _append_log_line(f"\n[-] 복사 중 오류가 발생했습니다. (종료 코드: {returncode})")
+        notify_text = f"❌ **[BookOasis] 폴더 복사 실패** (종료 코드: {returncode})\n목적지: `{dest_path}`"
 
     _update_state(status=status, returncode=returncode, finished_at=time.time(), pid=None)
+    _notify_discord(discord_webhook_url, notify_text)
 
 
 def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, dest_folder_name,
-                    source_url_input=None, dest_input=None):
+                    source_url_input=None, dest_input=None, discord_webhook_url=None):
     """
     유효성 검사 후 백그라운드 스레드로 rclone copy를 시작합니다.
     이미 실행 중인(그리고 실제로 살아있는) job이 있으면 거부합니다.
@@ -291,6 +316,9 @@ def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, d
     source_url_input / dest_input: 변환 전, 사용자가 화면에 실제로 타이핑한 원본
     값(소스는 URL 그대로, 목적지는 마운트 경로일 수도 있는 원본). 새로고침 시
     입력창을 그대로 복원해주기 위해 job 상태에 함께 저장한다.
+
+    discord_webhook_url: 설정된 경우, 복사가 끝났을 때(성공/실패/중단 모두)
+    디스코드로 알림을 보낸다. 비어있으면 알림을 보내지 않는다.
     """
     rclone_path = (rclone_path or "").strip()
     config_path = (config_path or "").strip()
@@ -328,7 +356,7 @@ def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, d
 
     thread = threading.Thread(
         target=_run_job,
-        args=(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name),
+        args=(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name, discord_webhook_url),
         daemon=True,
     )
     thread.start()

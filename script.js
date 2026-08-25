@@ -84,8 +84,9 @@
     updateDestPreview();
     if (cfg.configured) {
       banner.setAttribute('data-state', 'ok');
+      const discordNote = cfg.discord_notify_enabled ? ' · 디스코드 알림 켜짐' : '';
       banner.textContent =
-        `설정 완료 · remote: ${cfg.rclone_remote} · rclone: ${cfg.rclone_path} · 마운트 접두사: ${cfg.mount_prefix}`;
+        `설정 완료 · remote: ${cfg.rclone_remote} · rclone: ${cfg.rclone_path} · 마운트 접두사: ${cfg.mount_prefix}${discordNote}`;
     } else {
       banner.setAttribute('data-state', 'missing');
       banner.textContent =

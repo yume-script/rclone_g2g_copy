@@ -73,6 +73,12 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
             "type": "text",
             "default": "",
         },
+        {
+            "key": "DISCORD_WEBHOOK_URL",
+            "label": "디스코드 웹훅 URL (선택 — 비워두면 알림 없음)",
+            "type": "password",
+            "default": "",
+        },
     ]
 
     update_manifest = {
@@ -168,6 +174,7 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 dest_folder_name=dest_folder_name,
                 source_url_input=source_url,
                 dest_input=dest_input,
+                discord_webhook_url=config.get("DISCORD_WEBHOOK_URL"),
             )
         except ConfigError as e:
             return False, str(e)
@@ -196,6 +203,7 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 "rclone_path": config.get("RCLONE_PATH"),
                 "rclone_remote": config.get("RCLONE_REMOTE"),
                 "mount_prefix": mount_prefix,
+                "discord_notify_enabled": bool(config.get("DISCORD_WEBHOOK_URL")),
             },
             "job": job,  # None이면 아직 시작한 job이 없다는 뜻
         }
