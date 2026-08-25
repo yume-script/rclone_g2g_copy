@@ -27,6 +27,17 @@
   let mountPrefix = '';
   let inputsPrefilled = false;
 
+  // 폴링 주기. 이 프레임워크는 요청마다 플러그인 모듈을 새로 로드하는
+  // 구조라(README 참고), 폴링이 잦을수록 서버 부하가 커진다. 그래서:
+  //  - 시작 직후 잠깐만(START_BURST_MS) 빠르게(FAST_MS) 확인해서 반응성을 살리고,
+  //  - 그 뒤로는 느리게(SLOW_MS)만 확인한다.
+  //  - 브라우저 탭이 보이지 않을 때는(document.hidden) 폴링을 완전히 멈추고,
+  //    다시 보이게 되면 즉시 한 번 확인 후 재개한다.
+  const POLL_FAST_MS = 2000;
+  const POLL_SLOW_MS = 8000;
+  const POLL_FAST_WINDOW_MS = 20000;
+  let pollStartedAt = 0;
+
   const STATUS_LABEL = {
     success: '완료',
     cancelled: '사용자가 중단함',
@@ -102,9 +113,17 @@
 
   function stopPolling() {
     if (pollTimer) {
-      clearInterval(pollTimer);
+      clearTimeout(pollTimer);
       pollTimer = null;
     }
+  }
+
+  function scheduleNextPoll() {
+    stopPolling();
+    if (document.hidden) return; // 탭이 안 보이면 예약하지 않음 - visibilitychange가 재개시킴
+    const elapsed = Date.now() - pollStartedAt;
+    const interval = elapsed < POLL_FAST_WINDOW_MS ? POLL_FAST_MS : POLL_SLOW_MS;
+    pollTimer = setTimeout(poll, interval);
   }
 
   function setRunningUI(isRunning) {
@@ -174,15 +193,33 @@
         }
         renderConfigBanner(data.config);
         renderJob(data.job);
-        if (data.job && data.job.status === 'running' && !pollTimer) {
-          pollTimer = setInterval(poll, 1000);
+
+        if (data.job && data.job.status === 'running') {
+          if (!pollStartedAt) pollStartedAt = Date.now();
+          scheduleNextPoll();
+        } else {
+          pollStartedAt = 0;
+          stopPolling();
         }
       })
       .catch((err) => {
         statusText.textContent = `상태 조회 실패: ${err}`;
         console.error(LOG_PREFIX, '요청 실패:', err);
+        // 네트워크 오류로도 폴링이 끊기지 않도록, 진행 중이었다면 계속 재시도
+        if (pollStartedAt) scheduleNextPoll();
       });
   }
+
+  // 탭이 백그라운드로 가면 폴링을 멈추고, 다시 보이면 즉시 한 번 확인 후
+  // 필요하면 재개한다 - 안 보고 있는 동안의 불필요한 부하를 없앤다.
+  function onVisibilityChange() {
+    if (document.hidden) {
+      stopPolling();
+    } else {
+      poll();
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange);
 
   // ==================================================================
   // 액션 호출 공통부 - scan_scheduler의 saveEdit()과 동일한 호출 규약:
@@ -230,8 +267,7 @@
         }
         statusText.textContent = data.message || '복사를 시작했습니다.';
         console.log(LOG_PREFIX, '복사 시작 요청 성공');
-        stopPolling();
-        pollTimer = setInterval(poll, 1000);
+        pollStartedAt = Date.now(); // 시작 직후 잠깐은 빠르게 확인
         poll();
       })
       .catch((err) => {
@@ -257,7 +293,9 @@
         }
         statusText.textContent = data.message || '중단을 요청했습니다.';
         console.log(LOG_PREFIX, '중단 요청 성공');
-        // 상태 갱신은 poll()이 계속 돌면서 반영 (곧 status가 cancelled로 바뀜)
+        // 중단 처리가 실제로 끝나는 걸 빨리 반영하도록 잠깐 빠른 주기로 전환
+        pollStartedAt = Date.now();
+        poll();
       })
       .catch((err) => {
         statusText.textContent = `중단 요청 실패: ${err}`;
@@ -274,6 +312,7 @@
   window.__bookOasisViewerCleanups = window.__bookOasisViewerCleanups || {};
   window.__bookOasisViewerCleanups[pluginId] = function () {
     stopPolling();
+    document.removeEventListener('visibilitychange', onVisibilityChange);
   };
 
   poll();
