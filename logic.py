@@ -264,10 +264,16 @@ def _notify_discord(webhook_url, content):
 # 실행
 # ---------------------------------------------------------------------------
 
-def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name, discord_webhook_url=None):
+def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name,
+             discord_webhook_url=None, transfers=8, checkers=16, fast_list=True):
     source_path = f"{rclone_remote},root_folder_id={source_id}:"
     dest_path = f"{rclone_remote}:{dest_folder_name}"
 
+    # 기본값(rclone: --transfers=4, --checkers=8)만으로는 구글 드라이브
+    # 서버사이드 복사(파일마다 독립적인 API 호출) 성능이 잘 안 나오는 경우가
+    # 많다. 동시 처리 개수를 늘리면 API 라운드트립 지연을 훨씬 잘 가려준다
+    # (단, 너무 높이면 구글 API 레이트리밋(403)에 걸려 오히려 재시도로
+    # 느려질 수 있으니 설정에서 조절 가능하게 함).
     cmd = [
         rclone_path,
         "copy",
@@ -276,13 +282,23 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
         "--config",
         config_path,
         "--progress",
+        "--transfers",
+        str(transfers),
+        "--checkers",
+        str(checkers),
     ]
+    if fast_list:
+        # 폴더/파일 개수가 많을 때 목록 조회 API 호출 수를 크게 줄여준다
+        # (메모리를 좀 더 쓰는 대신 훨씬 빠르게 전체 목록을 가져옴).
+        cmd.append("--fast-list")
 
     _append_log_line("=" * 60)
     _append_log_line(f"[*] Rclone 경로       : {rclone_path}")
     _append_log_line(f"[*] Config 파일 경로  : {config_path}")
     _append_log_line(f"[*] 소스 폴더 ID      : {source_id}")
     _append_log_line(f"[*] 목적지 경로       : {dest_path}")
+    _append_log_line(f"[*] 동시성            : --transfers={transfers} --checkers={checkers}"
+                      + (" --fast-list" if fast_list else ""))
     _append_log_line("=" * 60)
     _append_log_line("[*] 서버사이드 복사를 시작합니다...\n")
 
@@ -331,7 +347,8 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
 
 
 def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, dest_folder_name,
-                    source_url_input=None, dest_input=None, discord_webhook_url=None):
+                    source_url_input=None, dest_input=None, discord_webhook_url=None,
+                    transfers=8, checkers=16, fast_list=True):
     """
     유효성 검사 후 백그라운드 스레드로 rclone copy를 시작합니다.
     이미 실행 중인(그리고 실제로 살아있는) job이 있으면 거부합니다.
@@ -342,11 +359,24 @@ def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, d
 
     discord_webhook_url: 설정된 경우, 복사가 끝났을 때(성공/실패/중단 모두)
     디스코드로 알림을 보낸다. 비어있으면 알림을 보내지 않는다.
+
+    transfers / checkers / fast_list: rclone 동시성 옵션. 서버사이드 복사는
+    파일마다 독립적인 API 호출이라, 기본값(4/8)보다 늘리면 훨씬 빨라지는
+    경우가 많다. 설정 화면에서 조절 가능.
     """
     rclone_path = (rclone_path or "").strip()
     config_path = (config_path or "").strip()
     rclone_remote = (rclone_remote or "").strip()
     dest_folder_name = (dest_folder_name or "").strip()
+
+    try:
+        transfers = max(1, int(transfers))
+    except (TypeError, ValueError):
+        transfers = 8
+    try:
+        checkers = max(1, int(checkers))
+    except (TypeError, ValueError):
+        checkers = 16
 
     if not rclone_path or not config_path or not rclone_remote:
         raise ConfigError("RCLONE_PATH / CONFIG_PATH / RCLONE_REMOTE가 설정되지 않았습니다. 설정 화면에서 먼저 저장해주세요.")
@@ -379,7 +409,8 @@ def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, d
 
     thread = threading.Thread(
         target=_run_job,
-        args=(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name, discord_webhook_url),
+        args=(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name,
+              discord_webhook_url, transfers, checkers, fast_list),
         daemon=True,
     )
     thread.start()

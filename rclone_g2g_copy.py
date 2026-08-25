@@ -82,6 +82,28 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
             "type": "password",
             "default": "",
         },
+        {
+            "key": "RCLONE_TRANSFERS",
+            "label": "동시 전송 개수 (--transfers, 기본 8)",
+            "type": "text",
+            "default": "8",
+        },
+        {
+            "key": "RCLONE_CHECKERS",
+            "label": "동시 목록조회 개수 (--checkers, 기본 16)",
+            "type": "text",
+            "default": "16",
+        },
+        {
+            "key": "RCLONE_FAST_LIST",
+            "label": "빠른 목록조회 (--fast-list)",
+            "type": "select",
+            "default": "true",
+            "options": [
+                {"value": "true", "label": "켜짐 (권장 — 파일/폴더가 많을 때 훨씬 빠름)"},
+                {"value": "false", "label": "꺼짐 (메모리가 매우 부족한 환경에서만)"},
+            ],
+        },
     ]
 
     update_manifest = {
@@ -193,6 +215,9 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 source_url_input=source_url,
                 dest_input=dest_input,
                 discord_webhook_url=config.get("DISCORD_WEBHOOK_URL"),
+                transfers=config.get("RCLONE_TRANSFERS"),
+                checkers=config.get("RCLONE_CHECKERS"),
+                fast_list=str(config.get("RCLONE_FAST_LIST", "true")).lower() != "false",
             )
         except ConfigError as e:
             return False, str(e)
