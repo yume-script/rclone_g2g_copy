@@ -83,17 +83,21 @@
   }
 
   function appendLines(lines) {
-    if (!lines || lines.length === 0) return;
-    const toAppend = lines.slice(renderedLineCount);
-    if (toAppend.length === 0) return;
-    if (renderedLineCount === 0) {
-      logBox.textContent = '';
-    }
-    toAppend.forEach((line) => {
-      logBox.textContent += `${line}\n`;
-    });
+    // 이전엔 새 줄마다 logBox.textContent += line 을 반복했는데, 줄이
+    // 많아지면(수백~수천 줄) 매번 전체 문자열을 새로 복사하게 되어(사실상
+    // O(n^2)) 화면 전환/새로고침 직후 첫 렌더링이 눈에 띄게 느렸다.
+    // 서버가 최근 최대 500줄만 내려주므로(logic.py의 _MAX_RETURN_LINES),
+    // 매 폴링마다 배열을 한 번에 join해서 통째로 다시 그려도 충분히 가볍다
+    // (길이만 비교해서 건너뛰면, 오래된 줄이 잘려나가고 새 줄이 추가돼
+    // 총 길이가 그대로인 경우를 놓쳐 갱신이 멈춘 것처럼 보이는 버그가 있었음).
+    if (!lines) return;
+
+    const nearBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40;
+    logBox.textContent = lines.join('\n');
     renderedLineCount = lines.length;
-    logBox.scrollTop = logBox.scrollHeight;
+    if (nearBottom) {
+      logBox.scrollTop = logBox.scrollHeight;
+    }
   }
 
   function stopPolling() {

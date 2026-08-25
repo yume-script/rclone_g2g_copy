@@ -49,8 +49,11 @@ DATA_DIR = os.path.join(".", "plugins", "data", PLUGIN_ID)  # ./plugins/data/rcl
 STATE_FILE = os.path.join(DATA_DIR, "job_state.json")
 LOG_FILE = os.path.join(DATA_DIR, "job.log")
 
-# 로그 파일이 무한정 커지지 않도록, 폴링 시 돌려주는 최대 라인 수
-_MAX_RETURN_LINES = 3000
+# 폴링 응답으로 돌려주는 최대 라인 수. 화면 전환/새로고침 직후 첫 폴링에서
+# 이 값만큼을 통째로 내려받아 렌더링하므로, 너무 크면 전송량과 렌더링 둘 다
+# 느려진다. 최근 상황만 보이면 충분하다는 전제로 낮춰뒀다 - 전체 로그는
+# 여전히 job.log 파일에 다 남아있으니 필요하면 서버에서 직접 확인 가능.
+_MAX_RETURN_LINES = 30
 
 # 같은 프로세스 안에서의 파일 read-modify-write 경합만 막는 용도(여러 워커/
 # 프로세스 간 완전한 동시성 보장은 아님 - 1워커 전제와 동일한 수준의 안전성)
@@ -164,14 +167,40 @@ def _append_log_line(text):
 
 
 def _read_log_lines():
+    """로그 파일의 마지막 _MAX_RETURN_LINES 줄만 읽는다.
+
+    이전에는 파일 전체를 읽은 뒤 파이썬에서 뒤쪽만 잘라냈는데, 복사가 오래
+    걸려 로그가 커지면(수천~수만 줄) 매 폴링(1초 간격)마다 파일 전체를 메모리에
+    올리는 게 화면 전환/새로고침 직후 느려지는 원인 중 하나였다. 파일 끝에서부터
+    청크 단위로 거꾸로 읽어 필요한 줄 수만 확보하면 로그가 아무리 커져도 매번
+    읽는 양이 일정하다.
+    """
     try:
-        with open(LOG_FILE, "r", encoding="utf-8") as f:
-            lines = f.read().splitlines()
+        file_size = os.path.getsize(LOG_FILE)
     except FileNotFoundError:
         return []
-    if len(lines) > _MAX_RETURN_LINES:
-        # 앞부분은 잘라내고, 잘렸다는 사실을 첫 줄에 표시
-        lines = ["... (앞부분 생략) ..."] + lines[-_MAX_RETURN_LINES:]
+
+    chunk_size = 8192
+    blocks = []
+    lines_found = 0
+    remaining = file_size
+
+    with open(LOG_FILE, "rb") as f:
+        while remaining > 0 and lines_found <= _MAX_RETURN_LINES:
+            read_size = min(chunk_size, remaining)
+            remaining -= read_size
+            f.seek(remaining)
+            block = f.read(read_size)
+            blocks.append(block)
+            lines_found += block.count(b"\n")
+
+    content = b"".join(reversed(blocks)).decode("utf-8", errors="replace")
+    lines = content.splitlines()
+
+    truncated = len(lines) > _MAX_RETURN_LINES or remaining > 0
+    lines = lines[-_MAX_RETURN_LINES:]
+    if truncated:
+        lines = ["... (앞부분 생략) ..."] + lines
     return lines
 
 
