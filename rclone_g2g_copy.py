@@ -31,7 +31,7 @@ rclone_g2g_copy (폴더 복사 - rclone G2G)
 
 from plugins.metadata.base import BaseMetadataProvider
 
-from .logic import ConfigError, start_copy_job, get_last_job_status
+from .logic import ConfigError, start_copy_job, cancel_current_job, get_last_job_status
 
 
 class RcloneG2gCopyProvider(BaseMetadataProvider):
@@ -112,11 +112,8 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
 
     def apply(self, db_type, book_id, item_data):
         """book_id=0으로 호출되는 범용 액션 채널 (plugin_board/scan_scheduler와 동일 패턴).
-        item_data = {
-            "action": "start_copy",
-            "source_url": "https://drive.google.com/drive/folders/xxxx 또는 폴더ID",
-            "dest_folder_name": "/remote/기준/목적지/경로",
-        }
+        item_data = {"action": "start_copy", "source_url": ..., "dest_folder_name": ...}
+        또는 item_data = {"action": "cancel_copy"}
         """
         try:
             return self._dispatch_apply(db_type, item_data)
@@ -128,9 +125,15 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
             return False, "유효하지 않은 요청 데이터 형식입니다."
 
         action = str(item_data.get("action", "")).strip()
-        if action != "start_copy":
-            return False, "지원하지 않는 action입니다: %s" % action
 
+        if action == "start_copy":
+            return self._start_copy(db_type, item_data)
+        if action == "cancel_copy":
+            return cancel_current_job()
+
+        return False, "지원하지 않는 action입니다: %s" % action
+
+    def _start_copy(self, db_type, item_data):
         source_url = str(item_data.get("source_url", "")).strip()
         dest_folder_name = str(item_data.get("dest_folder_name", "")).strip()
 

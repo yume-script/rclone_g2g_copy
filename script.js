@@ -12,15 +12,21 @@
 
   let pollTimer = null;
   let renderedLineCount = 0;
-  let lastJobStatus = null; // running | success | error | null(아직 없음)
+  let lastJobStatus = null; // running | success | error | cancelled | null(아직 없음)
 
   const banner = container.querySelector('[data-role="config-banner"]');
   const sourceInput = container.querySelector('[data-role="source-url"]');
   const destInput = container.querySelector('[data-role="dest-folder"]');
   const startBtn = container.querySelector('[data-role="start-btn"]');
+  const cancelBtn = container.querySelector('[data-role="cancel-btn"]');
   const statusText = container.querySelector('[data-role="status-text"]');
   const logBox = container.querySelector('[data-role="log-box"]');
   const logDest = container.querySelector('[data-role="log-dest"]');
+
+  const STATUS_LABEL = {
+    success: '완료',
+    cancelled: '사용자가 중단함',
+  };
 
   function renderConfigBanner(cfg) {
     if (!cfg) return;
@@ -56,27 +62,37 @@
     }
   }
 
+  function setRunningUI(isRunning) {
+    startBtn.disabled = isRunning;
+    cancelBtn.hidden = !isRunning;
+    cancelBtn.disabled = false;
+  }
+
   function renderJob(job) {
     if (!job) {
       logDest.textContent = '';
+      setRunningUI(false);
       return;
     }
     logDest.textContent = job.dest_path ? `→ ${job.dest_path}` : '';
     appendLines(job.lines);
+
+    if (job.status === 'running') {
+      setRunningUI(true);
+    }
 
     if (job.status === lastJobStatus) return;
     lastJobStatus = job.status;
 
     if (job.status === 'running') {
       statusText.textContent = '복사 진행 중...';
-      startBtn.disabled = true;
-    } else if (job.status === 'success') {
-      statusText.textContent = '완료';
-      startBtn.disabled = false;
+    } else if (job.status === 'success' || job.status === 'cancelled') {
+      statusText.textContent = STATUS_LABEL[job.status];
+      setRunningUI(false);
       stopPolling();
     } else if (job.status === 'error') {
       statusText.textContent = `오류로 종료됨 (종료 코드: ${job.returncode})`;
-      startBtn.disabled = false;
+      setRunningUI(false);
       stopPolling();
     }
   }
@@ -110,10 +126,18 @@
   }
 
   // ==================================================================
-  // 복사 시작 (apply-metadata) - scan_scheduler의 saveEdit()과 동일한
-  // 호출 규약: POST /api/media/books/0/apply-metadata,
+  // 액션 호출 공통부 - scan_scheduler의 saveEdit()과 동일한 호출 규약:
+  // POST /api/media/books/0/apply-metadata,
   // body { type, source: pluginId, item_data }, 응답은 data.success / data.error
   // ==================================================================
+  function callApply(itemData) {
+    return fetch('/api/media/books/0/apply-metadata', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: DB_TYPE, source: pluginId, item_data: itemData }),
+    }).then((res) => res.json());
+  }
+
   function startCopy() {
     const sourceUrl = (sourceInput.value || '').trim();
     const destFolder = (destInput.value || '').trim();
@@ -134,20 +158,11 @@
     logBox.textContent = '';
     logDest.textContent = '';
 
-    fetch('/api/media/books/0/apply-metadata', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: DB_TYPE,
-        source: pluginId,
-        item_data: {
-          action: 'start_copy',
-          source_url: sourceUrl,
-          dest_folder_name: destFolder,
-        },
-      }),
+    callApply({
+      action: 'start_copy',
+      source_url: sourceUrl,
+      dest_folder_name: destFolder,
     })
-      .then((res) => res.json())
       .then((data) => {
         if (!data || !data.success) {
           statusText.textContent = (data && (data.error || data.message)) || '요청이 거부되었습니다.';
@@ -167,7 +182,33 @@
       });
   }
 
+  function cancelCopy() {
+    if (!window.confirm('진행 중인 복사를 중단할까요? 이미 복사된 파일은 그대로 남습니다.')) {
+      return;
+    }
+    cancelBtn.disabled = true;
+    statusText.textContent = '중단 요청 중...';
+
+    callApply({ action: 'cancel_copy' })
+      .then((data) => {
+        if (!data || !data.success) {
+          statusText.textContent = (data && (data.error || data.message)) || '중단 요청이 거부되었습니다.';
+          cancelBtn.disabled = false;
+          return;
+        }
+        statusText.textContent = data.message || '중단을 요청했습니다.';
+        console.log(LOG_PREFIX, '중단 요청 성공');
+        // 상태 갱신은 poll()이 계속 돌면서 반영 (곧 status가 cancelled로 바뀜)
+      })
+      .catch((err) => {
+        statusText.textContent = `중단 요청 실패: ${err}`;
+        cancelBtn.disabled = false;
+        console.error(LOG_PREFIX, '요청 실패:', err);
+      });
+  }
+
   startBtn.addEventListener('click', startCopy);
+  cancelBtn.addEventListener('click', cancelCopy);
 
   // 탭이 언마운트될 때 폴링 타이머가 남지 않도록 정리 레지스트리에 등록
   // (plugin_hub 작업 때 확인된 window.__bookOasisViewerCleanups 관례)
