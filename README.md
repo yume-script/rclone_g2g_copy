@@ -141,6 +141,34 @@ rclone 기본값(`--transfers=4`, `--checkers=8`)으로 돌아가고 있었습�
 느려질 수 있으니, 16~32 정도까지만 천천히 올려보는 걸 권장합니다. 값을
 비워두거나 숫자가 아닌 값을 넣으면 기본값(8/16)으로 자동 대체됩니다.
 
+## "Failed to save config ... device or resource busy" 에러
+
+이건 저희 플러그인 코드 문제가 아니라 **rclone + Docker의 잘 알려진 이슈**입니다
+([rclone/rclone#6656](https://github.com/rclone/rclone/issues/6656)).
+
+**원인**: 구글 OAuth 토큰이 만료되면 rclone이 자동으로 갱신하고, 그 갱신된
+토큰을 `rclone.conf`에 다시 저장하려고 시도합니다. 이때 rclone은 원자적 저장을
+위해 `rclone.conf` → `rclone.conf.old`로 **rename**하는 방식을 쓰는데,
+`rclone.conf` 파일을 도커에 **파일 하나만** 바인드 마운트해두면 그 파일 자체가
+마운트 지점이라 rename이 불가능해서 "device or resource busy"가 납니다.
+
+**해결책 (도커 볼륨 설정)**: `rclone.conf` 파일 하나만 마운트하지 말고, 그
+파일이 들어있는 **디렉터리 전체**를 마운트하세요.
+```yaml
+# 문제 있는 방식 (파일 하나만 마운트)
+- /root/docker/ff/db/rclone.conf:/app/config/rclone.conf
+
+# 해결 방식 (디렉터리 전체 마운트)
+- /root/docker/ff/db:/app/config
+```
+
+이건 BookOasis 컨테이너 자체의 볼륨 마운트 설정 문제라 플러그인 코드로는 근본
+해결이 안 되지만, `logic.py`의 `_maybe_explain_config_save_error()`가 실행
+로그에서 이 에러 패턴을 감지하면 원인/해결책 설명을 바로 뒤에 자동으로
+덧붙여줍니다 (같은 job 안에서 반복 출력되지 않도록 한 번만 표시 — 실제 반복
+발생 시나리오로 테스트 완료). 대개 이 오류가 나도 그 순간의 복사 자체는 계속
+진행되지만, 갱신된 토큰이 저장되지 않아 매번 다시 나타날 수 있습니다.
+
 ## job 상태를 왜 파일에 저장하는가 (중요)
 
 처음 버전은 job 상태/로그를 파이썬 모듈 전역 dict(메모리)에만 들고 있었는데,

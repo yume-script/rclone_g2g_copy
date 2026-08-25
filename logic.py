@@ -264,8 +264,42 @@ def _notify_discord(webhook_url, content):
 # 실행
 # ---------------------------------------------------------------------------
 
+_CONFIG_SAVE_HINT_SHOWN = False  # 같은 job 안에서 힌트를 반복 출력하지 않기 위한 플래그
+
+
+def _maybe_explain_config_save_error(line):
+    """rclone이 OAuth 토큰 갱신 후 rclone.conf에 다시 저장하려다 실패하는,
+    잘 알려진 rclone+Docker 이슈(rclone/rclone#6656)를 감지해 설명을 덧붙인다.
+
+    원인: rclone.conf 파일 "하나만" 도커에 바인드 마운트하면, 그 파일 자체가
+    마운트 지점이 되어 rclone이 원자적 저장을 위해 시도하는
+    rename(rclone.conf -> rclone.conf.old)이 "device or resource busy"로
+    실패한다. 코드로 고칠 수 있는 부분이 아니라(도커 볼륨 설정 문제),
+    최소한 원인과 해결책을 로그에 바로 보여준다.
+    """
+    global _CONFIG_SAVE_HINT_SHOWN
+    if _CONFIG_SAVE_HINT_SHOWN:
+        return
+    if "Failed to save config" not in line and "device or resource busy" not in line:
+        return
+    _CONFIG_SAVE_HINT_SHOWN = True
+    _append_log_line(
+        "[!] 참고: 위 오류는 이 플러그인이 아니라 rclone + Docker의 잘 알려진 "
+        "이슈입니다 (rclone/rclone#6656). 구글 인증 토큰이 갱신될 때 rclone이 "
+        "rclone.conf를 rename 방식으로 다시 저장하려 하는데, rclone.conf 파일을 "
+        "'파일 하나만' 도커에 바인드 마운트해두면 그 rename이 불가능해서 발생합니다. "
+        "docker-compose에서 rclone.conf 파일 하나만 마운트하지 말고, 그 파일이 "
+        "들어있는 디렉터리 전체를 마운트하도록 바꾸면 해결됩니다. "
+        "(대개 이 오류가 나도 이번 복사 자체는 계속 진행되지만, 갱신된 토큰이 "
+        "저장되지 않으므로 매번 반복해서 나타날 수 있습니다.)"
+    )
+
+
 def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_folder_name,
              discord_webhook_url=None, transfers=8, checkers=16, fast_list=True):
+    global _CONFIG_SAVE_HINT_SHOWN
+    _CONFIG_SAVE_HINT_SHOWN = False  # 새 job마다 힌트를 다시 보여줄 수 있게 초기화
+
     source_path = f"{rclone_remote},root_folder_id={source_id}:"
     dest_path = f"{rclone_remote}:{dest_folder_name}"
 
@@ -319,6 +353,7 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
             for piece in decoded.split("\r"):
                 if piece:
                     _append_log_line(piece)
+                    _maybe_explain_config_save_error(piece)
 
         process.wait()
         returncode = process.returncode
