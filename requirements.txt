@@ -1,0 +1,5 @@
+# rclone_g2g_copy는 표준 라이브러리(os/re/subprocess/threading/time/uuid)만
+# 사용하고, 실제 복사는 외부 rclone 실행 파일(설정의 RCLONE_PATH)을 통해
+# 수행하므로 별도의 pip 의존성이 없습니다. (관례상 다른 플러그인들과 동일하게
+# requirements.txt 파일 자체는 포함해둡니다.)
+subprocess

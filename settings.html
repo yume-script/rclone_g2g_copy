@@ -1,0 +1,79 @@
+<div class="rgc-settings" data-rgc-settings-root>
+  <p class="rgc-settings-desc">
+    rclone 실행 파일 경로, rclone.conf 경로, 사용할 remote 이름을 설정합니다.<br />
+    (복사할 소스 폴더 / 목적지 경로는 여기서 설정하지 않고, 왼쪽 사이드바의
+    <strong>"폴더 복사 (rclone G2G)"</strong> 탭에서 실행할 때마다 입력합니다.)
+  </p>
+
+  <div class="rgc-field">
+    <label for="rgc-rclone-path">RCLONE_PATH</label>
+    <input
+      type="text"
+      id="rgc-rclone-path"
+      name="RCLONE_PATH"
+      placeholder="/usr/bin/rclone"
+      autocomplete="off"
+    />
+    <p class="rgc-field-hint">
+      rclone 실행 파일 경로. 환경변수에 등록되어 있다면 <code>rclone</code> 만 입력해도 됩니다.
+    </p>
+  </div>
+
+  <div class="rgc-field">
+    <label for="rgc-config-path">CONFIG_PATH</label>
+    <input
+      type="text"
+      id="rgc-config-path"
+      name="CONFIG_PATH"
+      placeholder="/root/docker/ff/db/rclone.conf"
+      autocomplete="off"
+    />
+    <p class="rgc-field-hint">rclone.conf 파일의 절대 경로입니다.</p>
+  </div>
+
+  <div class="rgc-field">
+    <label for="rgc-rclone-remote">RCLONE_REMOTE</label>
+    <input
+      type="text"
+      id="rgc-rclone-remote"
+      name="RCLONE_REMOTE"
+      placeholder="zeeps_member"
+      autocomplete="off"
+    />
+    <p class="rgc-field-hint">rclone.conf에 등록된 리모트 이름입니다.</p>
+  </div>
+</div>
+
+<style>
+  .rgc-settings-desc {
+    margin: 0 0 16px;
+    color: var(--bo-text-secondary, #9a9a9a);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .rgc-field {
+    margin-bottom: 14px;
+  }
+  .rgc-field label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--bo-text-primary, #fff);
+    margin-bottom: 4px;
+  }
+  .rgc-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.15));
+    background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+    color: var(--bo-text-primary, #fff);
+    font-size: 13px;
+  }
+  .rgc-field-hint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--bo-text-secondary, #9a9a9a);
+  }
+</style>

@@ -1,0 +1,48 @@
+<div class="rgc-page">
+  <div class="rgc-header">
+    <div class="rgc-header-icon">📁</div>
+    <div class="rgc-header-text">
+      <h2>폴더 복사 (rclone G2G)</h2>
+      <p>rclone을 이용해 구글 드라이브 폴더를 서버사이드로 복사합니다. (다운로드/업로드 없이 구글 서버 내부에서 처리)</p>
+    </div>
+  </div>
+
+  <div class="rgc-config-banner" data-role="config-banner">
+    설정을 확인하는 중...
+  </div>
+
+  <div class="rgc-card">
+    <div class="rgc-field">
+      <label for="rgc-source-url">소스 폴더 (구글 드라이브 URL 또는 폴더 ID)</label>
+      <input
+        type="text"
+        id="rgc-source-url"
+        data-role="source-url"
+        placeholder="https://drive.google.com/drive/folders/xxxxxxxxxxxx"
+        autocomplete="off"
+      />
+    </div>
+
+    <div class="rgc-field">
+      <label for="rgc-dest-folder">목적지 경로 (remote 기준 상대 경로)</label>
+      <input
+        type="text"
+        id="rgc-dest-folder"
+        data-role="dest-folder"
+        placeholder="/zeepsmember/공유_폴더명"
+        autocomplete="off"
+      />
+    </div>
+
+    <button type="button" class="rgc-start-btn" data-role="start-btn">복사 시작</button>
+    <span class="rgc-status-text" data-role="status-text"></span>
+  </div>
+
+  <div class="rgc-log-card">
+    <div class="rgc-log-head">
+      <span>실행 로그</span>
+      <span class="rgc-log-dest" data-role="log-dest"></span>
+    </div>
+    <pre class="rgc-log-box" data-role="log-box">복사를 시작하면 이곳에 진행 상황이 표시됩니다.</pre>
+  </div>
+</div>
