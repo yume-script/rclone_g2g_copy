@@ -39,6 +39,7 @@ import threading
 import time
 import urllib.request
 import uuid
+from configparser import ConfigParser
 
 PLUGIN_ID = "rclone_g2g_copy"
 # 앱 실행 작업 디렉터리(cwd) 기준 상대 경로. __file__ 기준 상위 폴더를
@@ -74,6 +75,28 @@ def get_folder_id(drive_url):
     if drive_url and "/" not in drive_url:
         return drive_url
     raise ValueError("유효한 구글 드라이브 폴더 주소가 아닙니다.")
+
+
+def list_rclone_remotes(config_path):
+    """rclone.conf 파일을 파싱해 등록된 remote 이름 목록을 반환한다.
+
+    rclone.conf는 INI 형식이고, 각 remote는 `[remote_name]` 섹션 헤더로
+    시작한다. configparser로 그대로 파싱 가능하지만, 값들 중 `%`가 포함된
+    경우(예: 인코딩된 토큰 문자열) configparser의 기본 보간(interpolation)
+    기능이 오류를 낼 수 있어 interpolation=None으로 끈 raw 모드를 쓴다.
+
+    파일이 없거나 파싱에 실패하면(설정을 아직 안 끝냈거나 잘못된 경로) 예외를
+    던지지 않고 빈 리스트를 반환한다 - 설정 화면 자체가 깨지면 안 되므로.
+    """
+    config_path = (config_path or "").strip()
+    if not config_path or not os.path.exists(config_path):
+        return []
+    try:
+        parser = ConfigParser(interpolation=None)
+        parser.read(config_path, encoding="utf-8")
+        return list(parser.sections())
+    except Exception:
+        return []
 
 
 def to_rclone_relative_path(path, mount_prefix):

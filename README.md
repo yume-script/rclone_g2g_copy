@@ -95,6 +95,33 @@ rclone copy의 목적지는 `remote:상대경로` 형태라, 마운트 접두사
 실패 처리에는 영향을 주지 않도록 예외를 삼키고 로그에만 남깁니다 (실행 로그
 하단에 `[!] 디스코드 알림 전송 실패: ...`로 표시됨).
 
+## RCLONE_REMOTE 풀다운 (rclone.conf 자동 인식)
+
+설정 화면에서 `RCLONE_REMOTE`를 더 이상 직접 타이핑하지 않아도 됩니다.
+`CONFIG_PATH`(rclone.conf 경로)를 입력해두면, `settings.js`가 그 파일을 서버에서
+파싱해서 등록된 remote 이름들을 풀다운(select)으로 보여줍니다.
+
+- rclone.conf는 INI 형식이라 각 remote가 `[remote_name]` 섹션으로 구분되는데,
+  `logic.py`의 `list_rclone_remotes()`가 `configparser`로 이 섹션 이름들만
+  뽑아냅니다 (토큰 값에 `%`가 섞여 있어도 안전하도록 `interpolation=None`으로
+  읽음 — 실제 유사 형식으로 테스트 완료).
+- CONFIG_PATH 입력창에서 포커스를 벗어나면(저장 전이라도) 자동으로 새로고침되고,
+  RCLONE_REMOTE 라벨 옆 **↻ 새로고침** 버튼으로 언제든 다시 불러올 수 있습니다.
+- rclone.conf를 못 찾거나 remote가 하나도 없으면 자동으로 직접 입력 텍스트
+  필드로 돌아갑니다 — 항상 어떤 값이든 저장할 수 있게 폴백을 보장합니다.
+- 이미 저장돼 있던 값이 새로 불러온 목록에 없으면(예: rclone.conf에서 이미
+  지운 remote), 그 값을 몰래 다른 걸로 바꿔버리지 않도록 목록에 그대로
+  끼워 넣어서 보여줍니다.
+- 구현은 select/text 두 입력 중 **화면에 보이는 쪽에만** `name="RCLONE_REMOTE"`를
+  붙이는 방식입니다 (jsdom으로 실제 DOM 시뮬레이션해서 저장 시 숨겨진 입력의
+  값이 실수로 덮어쓰지 않는지 확인함). 텍스트 입력 쪽은 애초에
+  `name="RCLONE_REMOTE"`를 갖고 있어서, `settings.js`가 어떤 이유로든 실행에
+  실패해도 예전처럼 수동 입력은 항상 동작합니다.
+- 목록 조회는 새 Flask 라우트를 만들지 않고, 기존에 확인된 `apply()` 액션
+  채널(`item_data.action = "list_remotes"`)을 재사용했습니다. `apply()`가
+  `(bool, message)` 문자열만 돌려줄 수 있는 제약 때문에, remote 목록은
+  `message`에 JSON으로 실어 보내고 `settings.js`에서 `JSON.parse`합니다.
+
 ## job 상태를 왜 파일에 저장하는가 (중요)
 
 처음 버전은 job 상태/로그를 파이썬 모듈 전역 dict(메모리)에만 들고 있었는데,
@@ -148,12 +175,14 @@ PID**를 상태 파일에 저장해두고, 중단 요청이 오면 `os.kill(pid,
 rclone_g2g_copy/
   __init__.py          # provider 노출
   rclone_g2g_copy.py    # BaseMetadataProvider 계약 (search/apply/get_dashboard_data) + category_tab
-  logic.py               # rclone 실행/파일 기반 job 상태 관리/중단(PID kill) (원본 g2g.py 로직 이식)
-  settings.html           # 설정 모달 - RCLONE_PATH/CONFIG_PATH/RCLONE_REMOTE
-  index.html               # 카테고리탭 전체 화면 - 실행 폼 + 로그 + 중단 버튼
-  style.css                 # 카테고리탭 화면 스타일
-  script.js                  # 카테고리탭 화면 동작
-  requirements.txt            # 빈 파일 (외부 pip 의존성 없음 - unified_book 규칙대로 패키지명만 적는 파일)
+  logic.py               # rclone 실행/파일 기반 job 상태 관리/중단(PID kill)/rclone.conf 파싱/디스코드 알림
+  settings.html            # 설정 모달 - RCLONE_PATH/CONFIG_PATH/RCLONE_REMOTE(풀다운)/MOUNT_PREFIX/DISCORD_WEBHOOK_URL
+  settings.css              # 설정 모달 스타일
+  settings.js                # RCLONE_REMOTE 풀다운 채우기 (rclone.conf 자동 조회)
+  index.html                  # 카테고리탭 전체 화면 - 실행 폼 + 로그 + 중단 버튼
+  style.css                    # 카테고리탭 화면 스타일
+  script.js                     # 카테고리탭 화면 동작
+  requirements.txt               # 빈 파일 (외부 pip 의존성 없음 - unified_book 규칙대로 패키지명만 적는 파일)
   VERSION
   README.md
 ```

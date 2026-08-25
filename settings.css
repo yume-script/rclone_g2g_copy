@@ -1,0 +1,66 @@
+.rgc-settings-desc {
+  margin: 0 0 16px;
+  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.rgc-field {
+  margin-bottom: 14px;
+}
+.rgc-field label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--bo-text-primary, #fff);
+  margin-bottom: 4px;
+}
+.rgc-field input,
+.rgc-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.15));
+  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  color: var(--bo-text-primary, #fff);
+  font-size: 13px;
+}
+.rgc-field-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--bo-text-secondary, #9a9a9a);
+}
+
+.rgc-refresh-btn {
+  font-weight: 400;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.15));
+  background: transparent;
+  color: var(--bo-text-secondary, #9a9a9a);
+  cursor: pointer;
+}
+.rgc-refresh-btn:hover {
+  color: var(--bo-text-primary, #fff);
+  border-color: var(--bo-text-secondary, #9a9a9a);
+}
+.rgc-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rgc-field-hint[data-state="loading"] {
+  color: var(--bo-text-secondary, #9a9a9a);
+}
+.rgc-field-hint[data-state="ok"] {
+  color: #4a7dff;
+}
+.rgc-field-hint[data-state="empty"] {
+  color: #e7a13c;
+}
+.rgc-field-hint[data-state="error"] {
+  color: #e74c3c;
+}

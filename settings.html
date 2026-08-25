@@ -25,22 +25,41 @@
       type="text"
       id="rgc-config-path"
       name="CONFIG_PATH"
+      data-role="config-path-input"
       placeholder="/root/docker/ff/db/rclone.conf"
       autocomplete="off"
     />
     <p class="rgc-field-hint">rclone.conf 파일의 절대 경로입니다.</p>
   </div>
 
+  <!--
+    RCLONE_REMOTE: settings.js가 CONFIG_PATH를 읽어 rclone.conf에 등록된
+    remote 이름 목록을 가져와 풀다운(select)으로 채웁니다. 목록을 못
+    가져오면(경로 미입력/파일 없음/파싱 실패) 직접 입력하는 텍스트 필드로
+    자동 대체됩니다.
+  -->
   <div class="rgc-field">
-    <label for="rgc-rclone-remote">RCLONE_REMOTE</label>
+    <label for="rgc-rclone-remote">
+      RCLONE_REMOTE
+      <button type="button" class="rgc-refresh-btn" data-role="refresh-remotes-btn" title="rclone.conf 다시 읽기">↻ 새로고침</button>
+    </label>
+
+    <select
+      id="rgc-rclone-remote-select"
+      data-role="remote-select"
+      hidden
+    ></select>
+
     <input
       type="text"
-      id="rgc-rclone-remote"
+      id="rgc-rclone-remote-text"
       name="RCLONE_REMOTE"
+      data-role="remote-text"
       placeholder="zeeps_member"
       autocomplete="off"
     />
-    <p class="rgc-field-hint">rclone.conf에 등록된 리모트 이름입니다.</p>
+
+    <p class="rgc-field-hint" data-role="remote-hint">rclone.conf에 등록된 리모트 이름입니다.</p>
   </div>
 
   <div class="rgc-field">
@@ -76,37 +95,3 @@
     </p>
   </div>
 </div>
-
-<style>
-  .rgc-settings-desc {
-    margin: 0 0 16px;
-    color: var(--bo-text-secondary, #9a9a9a);
-    font-size: 13px;
-    line-height: 1.6;
-  }
-  .rgc-field {
-    margin-bottom: 14px;
-  }
-  .rgc-field label {
-    display: block;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--bo-text-primary, #fff);
-    margin-bottom: 4px;
-  }
-  .rgc-field input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.15));
-    background: var(--bo-surface, rgba(255, 255, 255, 0.04));
-    color: var(--bo-text-primary, #fff);
-    font-size: 13px;
-  }
-  .rgc-field-hint {
-    margin: 4px 0 0;
-    font-size: 12px;
-    color: var(--bo-text-secondary, #9a9a9a);
-  }
-</style>

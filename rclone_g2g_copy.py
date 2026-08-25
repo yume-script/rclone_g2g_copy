@@ -31,6 +31,8 @@ rclone_g2g_copy (폴더 복사 - rclone G2G)
 
 from plugins.metadata.base import BaseMetadataProvider
 
+import json
+
 from .logic import (
     ConfigError,
     start_copy_job,
@@ -38,6 +40,7 @@ from .logic import (
     get_last_job_status,
     to_rclone_relative_path,
     resolve_mount_prefix,
+    list_rclone_remotes,
 )
 
 
@@ -95,6 +98,8 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
             "style.css",
             "script.js",
             "settings.html",
+            "settings.css",
+            "settings.js",
             "requirements.txt",
         ],
         "version_file": "VERSION",
@@ -149,8 +154,21 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
             return self._start_copy(db_type, item_data)
         if action == "cancel_copy":
             return cancel_current_job()
+        if action == "list_remotes":
+            return self._list_remotes(item_data)
 
         return False, "지원하지 않는 action입니다: %s" % action
+
+    def _list_remotes(self, item_data):
+        """설정 화면(settings.js)이 RCLONE_REMOTE 풀다운을 채울 때 호출.
+        저장된 값이 아니라, 사용자가 지금 입력창에 타이핑 중인 CONFIG_PATH를
+        그대로 넘겨받아 미리보기를 제공한다 (저장을 먼저 안 해도 되도록).
+        apply()는 (bool, message) 문자열만 돌려줄 수 있어서, 목록은
+        message 안에 JSON으로 실어 보낸다 - script.js에서 JSON.parse해서 씀.
+        """
+        config_path = str(item_data.get("config_path", "")).strip()
+        remotes = list_rclone_remotes(config_path)
+        return True, json.dumps({"remotes": remotes})
 
     def _start_copy(self, db_type, item_data):
         source_url = str(item_data.get("source_url", "")).strip()
@@ -204,6 +222,9 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 "rclone_remote": config.get("RCLONE_REMOTE"),
                 "mount_prefix": mount_prefix,
                 "discord_notify_enabled": bool(config.get("DISCORD_WEBHOOK_URL")),
+                # 설정 화면(settings.js)이 RCLONE_REMOTE를 풀다운으로 그릴 때 씀.
+                # CONFIG_PATH가 아직 저장 전이거나 파일을 못 찾으면 빈 리스트.
+                "available_remotes": list_rclone_remotes(config.get("CONFIG_PATH")),
             },
             "job": job,  # None이면 아직 시작한 job이 없다는 뜻
         }
