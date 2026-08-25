@@ -8,10 +8,31 @@
 
 ## 화면 구성
 
-- **설정(모달, settings.html)**: `RCLONE_PATH` / `CONFIG_PATH` / `RCLONE_REMOTE`
-  — `config_schema`에 선언된 필드와 1:1 대응.
+- **설정(모달, settings.html)**: `RCLONE_PATH` / `CONFIG_PATH` / `RCLONE_REMOTE` /
+  `MOUNT_PREFIX`(선택) — `config_schema`에 선언된 필드와 1:1 대응.
 - **카테고리탭(사이드바 전체 화면, index.html)**: 소스 폴더(URL/ID), 목적지 경로,
   [복사 시작]/[중단] 버튼, 실시간 로그.
+
+## 목적지 경로 자동 변환 (마운트 경로 → rclone 기준 경로)
+
+rclone remote가 도커/호스트에 실제로 마운트되어 있으면(예: `/mnt/zeeps_member`),
+사용자는 파일탐색기/터미널에서 본 마운트 경로를 그대로 붙여넣기 쉽습니다. 그런데
+rclone copy의 목적지는 `remote:상대경로` 형태라, 마운트 접두사가 그대로 들어가면
+`/mnt/zeeps_member/zeepsmember/공유폴더`처럼 폴더가 중복되는 문제가 생깁니다.
+
+그래서 목적지 경로 입력값이 설정된 `MOUNT_PREFIX`(비워두면 `/mnt/<RCLONE_REMOTE>`
+자동 사용)로 시작하면, 그 접두사를 잘라내고 rclone 기준 상대 경로로 자동 변환합니다.
+이미 rclone 기준 경로를 입력한 경우(접두사와 안 겹치는 경우)는 그대로 사용합니다.
+
+- 예: `MOUNT_PREFIX = /mnt/zeeps_member`일 때
+  `/mnt/zeeps_member/zeepsmember/crars님_공유_5` 입력 →
+  `/zeepsmember/crars님_공유_5`로 변환되어 사용됨
+- 변환 결과는 목적지 경로 입력창 **바로 아래**에 실시간으로 미리보기가 뜹니다
+  (타이핑할 때마다 `script.js`가 즉시 계산 - `logic.py`의
+  `to_rclone_relative_path()`와 동일한 규칙을 JS로도 복제해뒀습니다).
+- 실제 변환은 서버 쪽(`_start_copy()`)에서 한 번 더 수행하므로, 프론트 미리보기
+  로직이 서버 판단과 달라도 최종 동작은 항상 서버 기준입니다.
+- 변환이 적용된 경우 [복사 시작] 응답 메시지에도 "...로 변환했습니다"라고 표시됩니다.
 
 ## job 상태를 왜 파일에 저장하는가 (중요)
 

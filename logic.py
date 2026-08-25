@@ -72,6 +72,42 @@ def get_folder_id(drive_url):
     raise ValueError("유효한 구글 드라이브 폴더 주소가 아닙니다.")
 
 
+def to_rclone_relative_path(path, mount_prefix):
+    """
+    사용자가 도커/호스트 마운트 기준 경로(예: /mnt/zeeps_member/zeepsmember/공유폴더)를
+    입력해도, rclone remote 기준 상대 경로(예: /zeepsmember/공유폴더)로 자동 변환한다.
+
+    rclone remote가 실제로는 호스트에 /mnt/<remote명> 같은 경로로 마운트되어 있는
+    경우, 사용자는 파일탐색기/터미널에서 본 마운트 경로를 그대로 붙여넣기 쉬운데,
+    rclone copy의 목적지는 "remote:상대경로" 형태라 마운트 접두사가 중복으로
+    들어가면 안 된다. 입력이 mount_prefix로 시작하면 그 접두사를 잘라내고,
+    아니면 이미 rclone 기준 경로라고 보고 그대로 반환한다.
+    """
+    path = (path or "").strip()
+    if not path:
+        return path
+
+    normalized_path = path.rstrip("/")
+    normalized_prefix = (mount_prefix or "").strip().rstrip("/")
+
+    if normalized_prefix and normalized_path.startswith(normalized_prefix):
+        remainder = normalized_path[len(normalized_prefix):]
+        if not remainder.startswith("/"):
+            remainder = "/" + remainder
+        return remainder or "/"
+
+    return path
+
+
+def resolve_mount_prefix(mount_prefix, rclone_remote):
+    """설정에 MOUNT_PREFIX가 비어있으면 관례적인 기본값(/mnt/<remote명>)을 사용한다."""
+    mount_prefix = (mount_prefix or "").strip()
+    if mount_prefix:
+        return mount_prefix
+    rclone_remote = (rclone_remote or "").strip()
+    return f"/mnt/{rclone_remote}" if rclone_remote else ""
+
+
 def _validate_config(rclone_path, config_path):
     if os.path.isabs(rclone_path) or "/" in rclone_path or "\\" in rclone_path:
         if not os.path.exists(rclone_path):

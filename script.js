@@ -17,23 +17,63 @@
   const banner = container.querySelector('[data-role="config-banner"]');
   const sourceInput = container.querySelector('[data-role="source-url"]');
   const destInput = container.querySelector('[data-role="dest-folder"]');
+  const destPreview = container.querySelector('[data-role="dest-preview"]');
   const startBtn = container.querySelector('[data-role="start-btn"]');
   const cancelBtn = container.querySelector('[data-role="cancel-btn"]');
   const statusText = container.querySelector('[data-role="status-text"]');
   const logBox = container.querySelector('[data-role="log-box"]');
   const logDest = container.querySelector('[data-role="log-dest"]');
 
+  let mountPrefix = '';
+
   const STATUS_LABEL = {
     success: '완료',
     cancelled: '사용자가 중단함',
   };
 
+  // logic.py의 to_rclone_relative_path()와 동일한 규칙: 입력이 마운트
+  // 접두사로 시작하면 그 부분을 잘라내 rclone 기준 상대 경로로 바꾼다.
+  // (서버에서도 동일하게 다시 한 번 변환하므로, 여기는 미리보기 전용)
+  function toRcloneRelativePath(path, prefix) {
+    const p = (path || '').trim();
+    if (!p) return p;
+    const normPath = p.replace(/\/+$/, '');
+    const normPrefix = (prefix || '').trim().replace(/\/+$/, '');
+    if (normPrefix && normPath.startsWith(normPrefix)) {
+      let remainder = normPath.slice(normPrefix.length);
+      if (!remainder.startsWith('/')) remainder = '/' + remainder;
+      return remainder || '/';
+    }
+    return p;
+  }
+
+  function updateDestPreview() {
+    const raw = (destInput.value || '').trim();
+    if (!raw) {
+      destPreview.textContent = '';
+      destPreview.removeAttribute('data-state');
+      return;
+    }
+    const converted = toRcloneRelativePath(raw, mountPrefix);
+    if (converted !== raw) {
+      destPreview.textContent = `→ rclone 기준 경로: ${converted}`;
+      destPreview.setAttribute('data-state', 'converted');
+    } else {
+      destPreview.textContent = `rclone 기준 경로로 그대로 사용됩니다: ${raw}`;
+      destPreview.removeAttribute('data-state');
+    }
+  }
+
+  destInput.addEventListener('input', updateDestPreview);
+
   function renderConfigBanner(cfg) {
     if (!cfg) return;
+    mountPrefix = cfg.mount_prefix || '';
+    updateDestPreview();
     if (cfg.configured) {
       banner.setAttribute('data-state', 'ok');
       banner.textContent =
-        `설정 완료 · remote: ${cfg.rclone_remote} · rclone: ${cfg.rclone_path}`;
+        `설정 완료 · remote: ${cfg.rclone_remote} · rclone: ${cfg.rclone_path} · 마운트 접두사: ${cfg.mount_prefix}`;
     } else {
       banner.setAttribute('data-state', 'missing');
       banner.textContent =

@@ -85,6 +85,18 @@
   font-size: 13px;
 }
 
+.rgc-dest-preview {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  color: var(--bo-text-secondary, #9a9a9a);
+  min-height: 16px;
+}
+
+.rgc-dest-preview[data-state="converted"] {
+  color: #4a7dff;
+}
+
 .rgc-start-btn {
   padding: 9px 18px;
   border-radius: 8px;

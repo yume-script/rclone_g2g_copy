@@ -31,7 +31,14 @@ rclone_g2g_copy (폴더 복사 - rclone G2G)
 
 from plugins.metadata.base import BaseMetadataProvider
 
-from .logic import ConfigError, start_copy_job, cancel_current_job, get_last_job_status
+from .logic import (
+    ConfigError,
+    start_copy_job,
+    cancel_current_job,
+    get_last_job_status,
+    to_rclone_relative_path,
+    resolve_mount_prefix,
+)
 
 
 class RcloneG2gCopyProvider(BaseMetadataProvider):
@@ -57,6 +64,12 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
         {
             "key": "RCLONE_REMOTE",
             "label": "RCLONE_REMOTE (rclone.conf에 등록된 remote 이름)",
+            "type": "text",
+            "default": "",
+        },
+        {
+            "key": "MOUNT_PREFIX",
+            "label": "호스트/도커 마운트 경로 접두사 (선택 — 비워두면 /mnt/<RCLONE_REMOTE> 자동 사용)",
             "type": "text",
             "default": "",
         },
@@ -135,14 +148,16 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
 
     def _start_copy(self, db_type, item_data):
         source_url = str(item_data.get("source_url", "")).strip()
-        dest_folder_name = str(item_data.get("dest_folder_name", "")).strip()
+        dest_input = str(item_data.get("dest_folder_name", "")).strip()
 
         if not source_url:
             return False, "소스 폴더 URL(또는 ID)을 입력해주세요."
-        if not dest_folder_name:
+        if not dest_input:
             return False, "목적지 경로를 입력해주세요."
 
         config = self._get_config(db_type)
+        mount_prefix = resolve_mount_prefix(config.get("MOUNT_PREFIX"), config.get("RCLONE_REMOTE"))
+        dest_folder_name = to_rclone_relative_path(dest_input, mount_prefix)
 
         try:
             start_copy_job(
@@ -157,6 +172,8 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
         except (ValueError, RuntimeError) as e:
             return False, str(e)
 
+        if dest_folder_name != dest_input:
+            return True, f"복사를 시작했습니다. (입력하신 마운트 경로를 rclone 기준 경로 \"{dest_folder_name}\"로 변환했습니다)"
         return True, "복사를 시작했습니다. 진행 상황은 화면 하단 로그에서 확인하세요."
 
     # ------------------------------------------------------------------
@@ -166,6 +183,7 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
     def get_dashboard_data(self, db_type, limit=10):
         config = self._get_config(db_type)
         configured = bool(config.get("RCLONE_PATH") and config.get("CONFIG_PATH") and config.get("RCLONE_REMOTE"))
+        mount_prefix = resolve_mount_prefix(config.get("MOUNT_PREFIX"), config.get("RCLONE_REMOTE"))
 
         job = get_last_job_status()
 
@@ -175,6 +193,7 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 "configured": configured,
                 "rclone_path": config.get("RCLONE_PATH"),
                 "rclone_remote": config.get("RCLONE_REMOTE"),
+                "mount_prefix": mount_prefix,
             },
             "job": job,  # None이면 아직 시작한 job이 없다는 뜻
         }

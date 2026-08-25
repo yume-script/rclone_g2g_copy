@@ -24,14 +24,15 @@
     </div>
 
     <div class="rgc-field">
-      <label for="rgc-dest-folder">목적지 경로 (remote 기준 상대 경로)</label>
+      <label for="rgc-dest-folder">목적지 경로 (도커/호스트 마운트 경로 또는 rclone 기준 상대 경로 둘 다 입력 가능)</label>
       <input
         type="text"
         id="rgc-dest-folder"
         data-role="dest-folder"
-        placeholder="/zeepsmember/공유_폴더명"
+        placeholder="/mnt/zeeps_member/zeepsmember/공유_폴더명 또는 /zeepsmember/공유_폴더명"
         autocomplete="off"
       />
+      <p class="rgc-dest-preview" data-role="dest-preview"></p>
     </div>
 
     <button type="button" class="rgc-start-btn" data-role="start-btn">복사 시작</button>

@@ -42,6 +42,23 @@
     />
     <p class="rgc-field-hint">rclone.conf에 등록된 리모트 이름입니다.</p>
   </div>
+
+  <div class="rgc-field">
+    <label for="rgc-mount-prefix">MOUNT_PREFIX (선택)</label>
+    <input
+      type="text"
+      id="rgc-mount-prefix"
+      name="MOUNT_PREFIX"
+      placeholder="/mnt/zeeps_member"
+      autocomplete="off"
+    />
+    <p class="rgc-field-hint">
+      이 rclone remote가 도커/호스트에 실제로 마운트되어 있는 경로입니다.<br />
+      카테고리탭에서 목적지 경로를 입력할 때, 이 접두사로 시작하면 자동으로
+      제거하고 rclone 기준 상대 경로로 바꿔줍니다.<br />
+      비워두면 <code>/mnt/RCLONE_REMOTE</code>를 기본값으로 사용합니다.
+    </p>
+  </div>
 </div>
 
 <style>
