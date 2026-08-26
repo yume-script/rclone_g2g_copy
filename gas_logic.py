@@ -29,7 +29,7 @@ import time
 import urllib.error
 import urllib.request
 
-from .logic import _read_state, _update_state, _write_state, get_folder_id
+from .logic import _process_is_alive, _read_state, _update_state, _write_state, get_folder_id
 
 _REQUEST_TIMEOUT = 15  # 초 - Apps Script 콜드스타트가 느릴 수 있어 넉넉히 잡음
 _MAX_CONSECUTIVE_FAILURES = 5  # 이 횟수만큼 연속으로 상태 조회에 실패하면 job을 error로 정리
@@ -100,8 +100,24 @@ def start_gas_job(webapp_url, secret, source_folder_url, dest_folder_url,
     dest_folder_id = get_folder_id(dest_folder_url)
 
     # 동시 1건 제한 - 웹앱 쪽도 확인하지만, rclone 백엔드와 일관된 UX를 위해
-    # 여기서도 먼저 확인한다.
+    # 여기서도 먼저 확인한다. 다만 로컬 상태가 "running"이라고 해서 무조건
+    # 막지는 않는다 - 실제로는 이미 끝났는데 로컬에 아직 반영이 안 됐을 수
+    # 있어서(예: 화면을 안 열어봐서 폴링이 한 번도 안 일어난 경우), 막기 전에
+    # 백엔드별로 "진짜 살아있는지" 한 번 더 확인한다 (rclone의 pid-alive
+    # 체크와 같은 취지).
     existing = _read_state()
+    if existing and existing.get("status") == "running":
+        if existing.get("backend") == "gas":
+            # 이 job이 실제로 아직 GAS에서 돌고 있는지 웹앱에 다시 물어본다 -
+            # 이미 끝났다면(success/error/cancelled) 여기서 로컬 상태가 정리되어
+            # 아래 최종 판정에서 막히지 않는다.
+            existing = refresh_gas_status(existing, webapp_url, secret)
+        else:
+            # rclone job이었던 경우 - 실제 프로세스가 죽어있으면(비정상 종료 등)
+            # 막지 않는다.
+            if not _process_is_alive(existing.get("pid")):
+                existing = None
+
     if existing and existing.get("status") == "running":
         raise RuntimeError("이미 실행 중인 복사 작업이 있습니다. 완료 또는 중단 후 다시 시도해주세요.")
 

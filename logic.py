@@ -482,8 +482,16 @@ def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, d
     source_id = get_folder_id(source_folder_url)
 
     existing = _read_state()
-    if existing and existing.get("status") == "running" and _process_is_alive(existing.get("pid")):
-        raise RuntimeError("이미 실행 중인 복사 작업이 있습니다. 완료 또는 중단 후 다시 시도해주세요.")
+    if existing and existing.get("status") == "running":
+        if existing.get("backend") == "gas":
+            # GAS job은 pid가 없어서(로컬 프로세스가 아님) 여기서 살아있는지 직접
+            # 확인할 방법이 없다. 잘못 놓치면 GAS/rclone이 동시에 도는 상황이
+            # 생기므로, 안전하게 "실행 중"으로 간주해 막는다 (진짜 끝났다면
+            # 화면을 새로고침하면 get_dashboard_data()가 웹앱에 물어봐서 곧
+            # 상태를 정리해준다).
+            raise RuntimeError("이미 실행 중인 GAS 복사 작업이 있습니다. 완료 또는 중단 후 다시 시도해주세요.")
+        if _process_is_alive(existing.get("pid")):
+            raise RuntimeError("이미 실행 중인 복사 작업이 있습니다. 완료 또는 중단 후 다시 시도해주세요.")
 
     job_id = uuid.uuid4().hex[:12]
     _reset_log()
