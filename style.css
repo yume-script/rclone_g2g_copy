@@ -167,6 +167,25 @@
   display: none;
 }
 
+.rgc-reset-link {
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.rgc-reset-link:hover {
+  color: #e74c3c;
+}
+
+.rgc-reset-link[hidden] {
+  display: none;
+}
+
 .rgc-status-text {
   margin-left: 10px;
   font-size: 13px;

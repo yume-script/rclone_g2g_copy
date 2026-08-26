@@ -37,6 +37,7 @@ from .logic import (
     ConfigError,
     start_copy_job,
     cancel_current_job,
+    force_reset_job,
     get_last_job_status,
     read_raw_state,
     to_rclone_relative_path,
@@ -192,6 +193,8 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
             return self._start_copy(db_type, item_data)
         if action == "cancel_copy":
             return self._cancel_copy(db_type)
+        if action == "reset_job":
+            return force_reset_job()
         if action == "list_remotes":
             return self._list_remotes(item_data)
 

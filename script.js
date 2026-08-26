@@ -24,6 +24,7 @@
   const destPreview = container.querySelector('[data-role="dest-preview"]');
   const startBtn = container.querySelector('[data-role="start-btn"]');
   const cancelBtn = container.querySelector('[data-role="cancel-btn"]');
+  const resetBtn = container.querySelector('[data-role="reset-btn"]');
   const statusText = container.querySelector('[data-role="status-text"]');
   const logBox = container.querySelector('[data-role="log-box"]');
   const logDest = container.querySelector('[data-role="log-dest"]');
@@ -179,6 +180,9 @@
     cancelBtn.disabled = false;
     // 실행 중에는 방식을 바꿔봐야 이번 job에는 적용이 안 되니 혼란 방지 차원에서 잠금
     methodCheckbox.disabled = isRunning || !gasConfigured;
+    // "중단"이 눌러도 안 먹히거나 실제로는 안 도는데 running으로 남아있는
+    // 꼬인 상황을 위한 탈출구 - 실행 중일 때 같이 보여준다.
+    resetBtn.hidden = !isRunning;
   }
 
   function formatProgressDetail(progress) {
@@ -368,8 +372,14 @@
     })
       .then((data) => {
         if (!data || !data.success) {
-          statusText.textContent = (data && (data.error || data.message)) || '요청이 거부되었습니다.';
+          const message = (data && (data.error || data.message)) || '요청이 거부되었습니다.';
+          statusText.textContent = message;
           startBtn.disabled = false;
+          // "이미 실행 중" 류의 거부라면, 실제로는 꼬여서 안 풀리는 상황일 수
+          // 있으니 강제 초기화 링크를 보여준다.
+          if (message.indexOf('이미 실행 중') !== -1) {
+            resetBtn.hidden = false;
+          }
           return;
         }
         statusText.textContent = data.message || '복사를 시작했습니다.';
@@ -411,8 +421,47 @@
       });
   }
 
+  function resetJob() {
+    if (
+      !window.confirm(
+        '작업 상태를 강제로 초기화할까요?\n\n' +
+          '"중단"이 안 먹히거나, 실제로는 끝났는데 화면에 계속 "실행 중"으로 남아있을 때만 사용하세요.\n' +
+          'GAS로 시작한 작업은 이 화면에서만 기록이 지워질 뿐, 구글 서버에서 실제로 돌고 있었다면 그쪽은 계속 진행됩니다.'
+      )
+    ) {
+      return;
+    }
+    resetBtn.disabled = true;
+    statusText.textContent = '초기화 중...';
+
+    callApply({ action: 'reset_job' })
+      .then((data) => {
+        if (!data || !data.success) {
+          statusText.textContent = (data && (data.error || data.message)) || '초기화가 거부되었습니다.';
+          resetBtn.disabled = false;
+          return;
+        }
+        statusText.textContent = data.message || '초기화되었습니다.';
+        console.log(LOG_PREFIX, '강제 초기화 완료');
+        lastJobStatus = null;
+        renderedLineCount = 0;
+        setRunningUI(false);
+        logBox.textContent = '';
+        logDest.textContent = '';
+        progressWrap.hidden = true;
+        stopPolling();
+        pollStartedAt = 0;
+      })
+      .catch((err) => {
+        statusText.textContent = `초기화 실패: ${err}`;
+        resetBtn.disabled = false;
+        console.error(LOG_PREFIX, '요청 실패:', err);
+      });
+  }
+
   startBtn.addEventListener('click', startCopy);
   cancelBtn.addEventListener('click', cancelCopy);
+  resetBtn.addEventListener('click', resetJob);
 
   // 탭이 언마운트될 때 폴링 타이머가 남지 않도록 정리 레지스트리에 등록
   // (plugin_hub 작업 때 확인된 window.__bookOasisViewerCleanups 관례)

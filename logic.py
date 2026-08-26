@@ -562,6 +562,36 @@ def cancel_current_job():
     return True, "중단을 요청했습니다. 잠시 후 종료됩니다."
 
 
+def force_reset_job():
+    """job_state.json/job.log를 강제로 초기화한다 (job이 없는 상태로 되돌림).
+
+    "이미 실행 중인 작업이 있습니다"가 실제로는 끝났는데도 계속 뜨는 등,
+    self-heal 로직으로도 안 풀리는 꼬인 상태를 사용자가 직접 빠져나올 수
+    있게 하는 최후의 수단. rclone 프로세스가 실제로 살아있다면(비정상적인
+    상황이지만) 먼저 정리 시도한 뒤 상태를 초기화한다 - 다만 이미 죽었거나
+    GAS job이면 로컬 기록만 지운다 (GAS 쪽에서 실제로 돌고 있던 작업 자체를
+    멈추지는 못한다 - 그건 cancel_copy가 하는 일).
+    """
+    state = _read_state()
+    if state and state.get("backend") != "gas":
+        pid = state.get("pid")
+        if pid and _process_is_alive(pid):
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except Exception:
+                pass
+
+    with _STATE_LOCK:
+        for path in (STATE_FILE, LOG_FILE):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+
+    return True, "작업 상태를 초기화했습니다. 다시 시작할 수 있습니다."
+
+
 def get_last_job_status():
     """get_dashboard_data()가 폴링용으로 쓰는, 가장 최근 job의 상태 + 로그."""
     state = _read_state()
