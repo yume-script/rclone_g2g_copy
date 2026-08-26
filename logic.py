@@ -61,6 +61,42 @@ _MAX_RETURN_LINES = 30
 # 프로세스 간 완전한 동시성 보장은 아님 - 1워커 전제와 동일한 수준의 안전성)
 _STATE_LOCK = threading.Lock()
 
+# rclone --progress 출력에서 진행률을 뽑아내는 정규식.
+# rclone은 --progress 상태 블록에 "Transferred:" 줄을 두 개 찍는다 -
+# 하나는 바이트 기준(용량/속도/ETA 포함), 하나는 파일 개수 기준. 예:
+#   Transferred:      340.471 MiB / 1.818 GiB, 18%, 3.410 MiB/s, ETA 7m26s
+#   Transferred:            9 / 8053, 0%
+_BYTE_PROGRESS_RE = re.compile(
+    r"^Transferred:\s*([\d.]+\s*[A-Za-z]+)\s*/\s*([\d.]+\s*[A-Za-z]+),\s*(\d+)%,"
+    r"\s*([\d.]+\s*[A-Za-z]+/s),\s*ETA\s+(.+?)\s*$"
+)
+_FILES_PROGRESS_RE = re.compile(r"^Transferred:\s*(\d+)\s*/\s*(\d+),\s*(\d+)%\s*$")
+
+
+def _parse_progress_line(line):
+    """rclone --progress 출력 한 줄에서 진행률 정보를 뽑아낸다.
+    매치되면 dict(일부 키만 채워짐), 아니면 None을 반환한다."""
+    line = line.strip()
+
+    m = _BYTE_PROGRESS_RE.match(line)
+    if m:
+        return {
+            "percent": int(m.group(3)),
+            "transferred": m.group(1).strip(),
+            "total": m.group(2).strip(),
+            "speed": m.group(4).strip(),
+            "eta": m.group(5).strip(),
+        }
+
+    m = _FILES_PROGRESS_RE.match(line)
+    if m:
+        return {
+            "files_done": int(m.group(1)),
+            "files_total": int(m.group(2)),
+        }
+
+    return None
+
 
 class ConfigError(Exception):
     """RCLONE_PATH / CONFIG_PATH 가 잘못 설정되었을 때"""
@@ -338,6 +374,7 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
 
     returncode = None
     process = None
+    progress = {}  # 파일개수 줄과 바이트 줄이 서로 다른 순간에 나오므로 누적해서 합친다
     try:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         _update_state(pid=process.pid)
@@ -354,6 +391,15 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
                 if piece:
                     _append_log_line(piece)
                     _maybe_explain_config_save_error(piece)
+
+                    parsed = _parse_progress_line(piece)
+                    if parsed:
+                        progress.update(parsed)
+                        # 바이트 기준 줄(퍼센트/속도/ETA 포함)이 rclone
+                        # --progress 갱신 주기(기본 1초)마다 한 번씩 찍히므로,
+                        # 그 타이밍에 맞춰서만 상태 파일에 반영한다.
+                        if "percent" in parsed:
+                            _update_state(progress=dict(progress))
 
         process.wait()
         returncode = process.returncode
@@ -372,12 +418,15 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
         status = "success"
         _append_log_line("\n[+] 서버사이드 복사가 성공적으로 완료되었습니다!")
         notify_text = f"✅ **[BookOasis] 폴더 복사 완료**\n목적지: `{dest_path}`"
+        progress["percent"] = 100  # rclone의 마지막 갱신이 100%를 안 찍고 끝나는 경우 대비
+        if progress.get("files_total"):
+            progress["files_done"] = progress["files_total"]
     else:
         status = "error"
         _append_log_line(f"\n[-] 복사 중 오류가 발생했습니다. (종료 코드: {returncode})")
         notify_text = f"❌ **[BookOasis] 폴더 복사 실패** (종료 코드: {returncode})\n목적지: `{dest_path}`"
 
-    _update_state(status=status, returncode=returncode, finished_at=time.time(), pid=None)
+    _update_state(status=status, returncode=returncode, finished_at=time.time(), pid=None, progress=progress)
     _notify_discord(discord_webhook_url, notify_text)
 
 
@@ -440,6 +489,7 @@ def start_copy_job(rclone_path, config_path, rclone_remote, source_folder_url, d
         # 새로고침 시 입력창 복원용 원본 값
         "source_url_input": (source_url_input or source_folder_url or "").strip(),
         "dest_input": (dest_input or dest_folder_name or "").strip(),
+        "progress": {},
     })
 
     thread = threading.Thread(

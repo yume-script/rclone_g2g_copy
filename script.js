@@ -23,6 +23,9 @@
   const statusText = container.querySelector('[data-role="status-text"]');
   const logBox = container.querySelector('[data-role="log-box"]');
   const logDest = container.querySelector('[data-role="log-dest"]');
+  const progressWrap = container.querySelector('[data-role="progress-wrap"]');
+  const progressFill = container.querySelector('[data-role="progress-fill"]');
+  const progressDetail = container.querySelector('[data-role="progress-detail"]');
 
   let mountPrefix = '';
   let inputsPrefilled = false;
@@ -133,10 +136,42 @@
     cancelBtn.disabled = false;
   }
 
+  function formatProgressDetail(progress) {
+    const parts = [];
+    if (typeof progress.percent === 'number') parts.push(`${progress.percent}%`);
+    if (progress.transferred && progress.total) parts.push(`${progress.transferred} / ${progress.total}`);
+    if (progress.speed) parts.push(progress.speed);
+    if (progress.eta) parts.push(`ETA ${progress.eta}`);
+    if (progress.files_total) parts.push(`${progress.files_done || 0} / ${progress.files_total} 파일`);
+    return parts.join(' · ');
+  }
+
+  function renderProgress(job) {
+    const progress = (job && job.progress) || null;
+    const hasData = progress && Object.keys(progress).length > 0;
+
+    if (!hasData) {
+      if (job && job.status === 'running') {
+        progressWrap.hidden = false;
+        progressFill.style.width = '0%';
+        progressDetail.textContent = '진행률 계산 중...';
+      } else {
+        progressWrap.hidden = true;
+      }
+      return;
+    }
+
+    progressWrap.hidden = false;
+    const percent = typeof progress.percent === 'number' ? progress.percent : 0;
+    progressFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    progressDetail.textContent = formatProgressDetail(progress);
+  }
+
   function renderJob(job) {
     if (!job) {
       logDest.textContent = '';
       setRunningUI(false);
+      progressWrap.hidden = true;
       return;
     }
 
@@ -155,6 +190,7 @@
     }
     logDest.textContent = job.dest_path ? `→ ${job.dest_path}` : '';
     appendLines(job.lines);
+    renderProgress(job); // 진행률은 상태가 바뀌지 않아도(계속 'running') 매 폴링마다 갱신되어야 함
 
     if (job.status === 'running') {
       setRunningUI(true);
@@ -254,6 +290,9 @@
     lastJobStatus = null;
     logBox.textContent = '';
     logDest.textContent = '';
+    progressWrap.hidden = true;
+    progressFill.style.width = '0%';
+    progressDetail.textContent = '';
 
     callApply({
       action: 'start_copy',
