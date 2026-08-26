@@ -75,7 +75,15 @@ _FILES_PROGRESS_RE = re.compile(r"^Transferred:\s*(\d+)\s*/\s*(\d+),\s*(\d+)%\s*
 
 def _parse_progress_line(line):
     """rclone --progress 출력 한 줄에서 진행률 정보를 뽑아낸다.
-    매치되면 dict(일부 키만 채워짐), 아니면 None을 반환한다."""
+    매치되면 dict(일부 키만 채워짐), 아니면 None을 반환한다.
+
+    rclone은 두 "Transferred:" 줄 각각에 자기 나름의 퍼센트를 찍는다 - 바이트
+    기준 퍼센트(전체 용량 대비)와 파일 개수 기준 퍼센트(전체 개수 대비)는
+    파일 크기가 제각각이면 서로 다르게 움직일 수 있다. 서버사이드 복사에서는
+    바이트 기준 줄보다 파일 개수 기준 줄이 더 자주/먼저 갱신되는 경우가 있어,
+    "전체 진행률"이 잘 안 움직이는 것처럼 보일 수 있다는 점을 감안해 둘 다
+    각각의 키로 보존한다 (프론트에서 바이트 기준을 우선하고 없으면 파일 개수
+    기준으로 대체)."""
     line = line.strip()
 
     m = _BYTE_PROGRESS_RE.match(line)
@@ -93,6 +101,7 @@ def _parse_progress_line(line):
         return {
             "files_done": int(m.group(1)),
             "files_total": int(m.group(2)),
+            "files_percent": int(m.group(3)),
         }
 
     return None
@@ -395,11 +404,12 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
                     parsed = _parse_progress_line(piece)
                     if parsed:
                         progress.update(parsed)
-                        # 바이트 기준 줄(퍼센트/속도/ETA 포함)이 rclone
-                        # --progress 갱신 주기(기본 1초)마다 한 번씩 찍히므로,
-                        # 그 타이밍에 맞춰서만 상태 파일에 반영한다.
-                        if "percent" in parsed:
-                            _update_state(progress=dict(progress))
+                        # 두 "Transferred:" 줄(바이트 기준/파일개수 기준) 중
+                        # 어느 쪽이 갱신되든 즉시 상태 파일에 반영한다. 서버사이드
+                        # 복사에서는 파일개수 줄이 바이트 줄보다 더 자주 움직이는
+                        # 경우가 있어서, 바이트 줄만 기다리면 "전체 진행률"이
+                        # 안 움직이는 것처럼 보일 수 있었다.
+                        _update_state(progress=dict(progress))
 
         process.wait()
         returncode = process.returncode
@@ -421,6 +431,7 @@ def _run_job(job_id, rclone_path, config_path, rclone_remote, source_id, dest_fo
         progress["percent"] = 100  # rclone의 마지막 갱신이 100%를 안 찍고 끝나는 경우 대비
         if progress.get("files_total"):
             progress["files_done"] = progress["files_total"]
+            progress["files_percent"] = 100
     else:
         status = "error"
         _append_log_line(f"\n[-] 복사 중 오류가 발생했습니다. (종료 코드: {returncode})")

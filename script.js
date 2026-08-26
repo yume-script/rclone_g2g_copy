@@ -25,6 +25,8 @@
   const logDest = container.querySelector('[data-role="log-dest"]');
   const progressWrap = container.querySelector('[data-role="progress-wrap"]');
   const progressFill = container.querySelector('[data-role="progress-fill"]');
+  const progressPercent = container.querySelector('[data-role="progress-percent"]');
+  const progressSummary = container.querySelector('[data-role="progress-summary"]');
   const progressDetail = container.querySelector('[data-role="progress-detail"]');
 
   let mountPrefix = '';
@@ -138,12 +140,21 @@
 
   function formatProgressDetail(progress) {
     const parts = [];
-    if (typeof progress.percent === 'number') parts.push(`${progress.percent}%`);
     if (progress.transferred && progress.total) parts.push(`${progress.transferred} / ${progress.total}`);
     if (progress.speed) parts.push(progress.speed);
     if (progress.eta) parts.push(`ETA ${progress.eta}`);
-    if (progress.files_total) parts.push(`${progress.files_done || 0} / ${progress.files_total} 파일`);
     return parts.join(' · ');
+  }
+
+  // "전체 진행률"로 보여줄 하나의 퍼센트를 고른다. rclone은 바이트 기준과
+  // 파일개수 기준, 두 가지 퍼센트를 따로 찍는데 파일 크기가 제각각이면 서로
+  // 다르게 움직인다. 바이트 기준(percent, 전체 데이터량 대비)이 더 정확한
+  // "전체" 지표라 우선하고, 아직 그 줄이 안 나왔으면(막 시작 직후) 파일개수
+  // 기준(files_percent)으로 대체해서 진행률 바가 먼저 움직이는 걸 보여준다.
+  function overallPercent(progress) {
+    if (typeof progress.percent === 'number') return progress.percent;
+    if (typeof progress.files_percent === 'number') return progress.files_percent;
+    return null;
   }
 
   function renderProgress(job) {
@@ -154,6 +165,8 @@
       if (job && job.status === 'running') {
         progressWrap.hidden = false;
         progressFill.style.width = '0%';
+        progressPercent.textContent = '0%';
+        progressSummary.textContent = '';
         progressDetail.textContent = '진행률 계산 중...';
       } else {
         progressWrap.hidden = true;
@@ -162,8 +175,13 @@
     }
 
     progressWrap.hidden = false;
-    const percent = typeof progress.percent === 'number' ? progress.percent : 0;
-    progressFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    const percent = overallPercent(progress);
+    const clamped = Math.max(0, Math.min(100, percent || 0));
+    progressFill.style.width = `${clamped}%`;
+    progressPercent.textContent = percent === null ? '-' : `${clamped}%`;
+    progressSummary.textContent = progress.files_total
+      ? `${progress.files_done || 0} / ${progress.files_total} 파일`
+      : '';
     progressDetail.textContent = formatProgressDetail(progress);
   }
 
@@ -292,6 +310,8 @@
     logDest.textContent = '';
     progressWrap.hidden = true;
     progressFill.style.width = '0%';
+    progressPercent.textContent = '0%';
+    progressSummary.textContent = '';
     progressDetail.textContent = '';
 
     callApply({

@@ -148,6 +148,25 @@
   display: none;
 }
 
+.rgc-progress-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.rgc-progress-percent {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--bo-text-primary, #fff);
+  font-variant-numeric: tabular-nums;
+}
+
+.rgc-progress-summary {
+  font-size: 12px;
+  color: var(--bo-text-secondary, #9a9a9a);
+}
+
 .rgc-progress-track {
   width: 100%;
   height: 8px;
