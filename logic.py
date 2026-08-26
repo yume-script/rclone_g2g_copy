@@ -571,6 +571,11 @@ def force_reset_job():
     상황이지만) 먼저 정리 시도한 뒤 상태를 초기화한다 - 다만 이미 죽었거나
     GAS job이면 로컬 기록만 지운다 (GAS 쪽에서 실제로 돌고 있던 작업 자체를
     멈추지는 못한다 - 그건 cancel_copy가 하는 일).
+
+    삭제가 실패해도(예: 권한 문제) 예외를 조용히 삼키지 않는다 - 예전엔
+    실패해도 "성공했다"고 잘못 알려줘서, 진짜 원인(파일 삭제 권한 등)이
+    안 보이는 문제가 있었다. 삭제 후 실제로 파일이 없어졌는지 다시
+    확인해서, 남아있으면 왜 실패한 것으로 보이는지와 함께 알려준다.
     """
     state = _read_state()
     if state and state.get("backend") != "gas":
@@ -581,13 +586,24 @@ def force_reset_job():
             except Exception:
                 pass
 
+    errors = []
     with _STATE_LOCK:
         for path in (STATE_FILE, LOG_FILE):
             try:
                 if os.path.exists(path):
                     os.remove(path)
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{path}: {e}")
+
+    # 삭제 시도 후 실제로 사라졌는지 재확인 (조용한 실패 방지)
+    still_there = [p for p in (STATE_FILE, LOG_FILE) if os.path.exists(p)]
+    if still_there:
+        abs_paths = ", ".join(os.path.abspath(p) for p in still_there)
+        detail = "; ".join(errors) if errors else "삭제 명령은 예외 없이 실행됐지만 파일이 그대로 남아있습니다."
+        return False, (
+            f"초기화에 실패했습니다 (파일 삭제 권한 문제일 수 있습니다). "
+            f"남은 파일: {abs_paths} · 상세: {detail}"
+        )
 
     return True, "작업 상태를 초기화했습니다. 다시 시작할 수 있습니다."
 
@@ -634,3 +650,12 @@ def read_raw_state():
     get_last_job_status()와 달리 좀비 체크나 로그 파일 읽기 같은 부가 처리를
     하지 않는, 가벼운 조회용."""
     return _read_state()
+
+
+def get_data_dir_abs():
+    """DATA_DIR(./plugins/data/rclone_g2g_copy, cwd 기준 상대경로)의 실제
+    절대경로. 화면 배너/로그에 노출해서, "강제 초기화해도 그대로임" 같은
+    문제가 생겼을 때 앱이 실제로 어느 경로를 쓰고 있는지 바로 확인할 수
+    있게 한다 (여러 워커/프로세스가 서로 다른 작업 디렉터리에서 떠서 각자
+    다른 파일을 보고 있는 경우 등을 의심해볼 수 있음)."""
+    return os.path.abspath(DATA_DIR)

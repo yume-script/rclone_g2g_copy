@@ -117,6 +117,17 @@
     if (!cfg) return;
     mountPrefix = cfg.mount_prefix || '';
 
+    // job_state.json/job.log가 실제로 어느 경로에 있는지는 배너 툴팁(마우스
+    // 오버)과 콘솔에 남겨둔다 - "강제 초기화해도 그대로임" 같은 문제를
+    // 진단할 때, 앱이 실제로 쓰는 경로를 바로 확인할 수 있게.
+    if (cfg.data_dir) {
+      banner.title = `데이터 경로: ${cfg.data_dir}`;
+      if (!renderConfigBanner._loggedDataDir) {
+        renderConfigBanner._loggedDataDir = true;
+        console.log(LOG_PREFIX, '데이터 경로:', cfg.data_dir);
+      }
+    }
+
     gasConfigured = !!cfg.gas_configured;
     if (gasConfigured) {
       methodToggleLabel.removeAttribute('data-disabled');

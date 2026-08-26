@@ -40,6 +40,7 @@ from .logic import (
     force_reset_job,
     get_last_job_status,
     read_raw_state,
+    get_data_dir_abs,
     to_rclone_relative_path,
     resolve_mount_prefix,
     list_rclone_remotes,
@@ -322,6 +323,9 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 # 설정 화면(settings.js)이 RCLONE_REMOTE를 풀다운으로 그릴 때 씀.
                 # CONFIG_PATH가 아직 저장 전이거나 파일을 못 찾으면 빈 리스트.
                 "available_remotes": list_rclone_remotes(config.get("CONFIG_PATH")),
+                # 디버깅용 - job_state.json/job.log가 실제로 어느 경로에 있는지.
+                # "강제 초기화해도 그대로임" 같은 문제 진단에 사용.
+                "data_dir": get_data_dir_abs(),
             },
             "job": job,  # None이면 아직 시작한 job이 없다는 뜻
         }
