@@ -38,10 +38,12 @@ from .logic import (
     start_copy_job,
     cancel_current_job,
     get_last_job_status,
+    read_raw_state,
     to_rclone_relative_path,
     resolve_mount_prefix,
     list_rclone_remotes,
 )
+from .gas_logic import start_gas_job, cancel_gas_job, maybe_refresh_gas_job
 
 
 class RcloneG2gCopyProvider(BaseMetadataProvider):
@@ -104,6 +106,18 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 {"value": "false", "label": "꺼짐 (메모리가 매우 부족한 환경에서만)"},
             ],
         },
+        {
+            "key": "GAS_WEBAPP_URL",
+            "label": "Google Apps Script 웹앱 URL (선택 — GAS 방식 복사를 쓸 때만 필요)",
+            "type": "text",
+            "default": "",
+        },
+        {
+            "key": "GAS_SHARED_SECRET",
+            "label": "Apps Script 공유 비밀키 (gas/Code.gs의 SHARED_SECRET과 동일해야 함)",
+            "type": "password",
+            "default": "",
+        },
     ]
 
     update_manifest = {
@@ -114,6 +128,7 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
         "files": [
             "rclone_g2g_copy.py",
             "logic.py",
+            "gas_logic.py",
             "__init__.py",
             "VERSION",
             "index.html",
@@ -123,6 +138,7 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
             "settings.css",
             "settings.js",
             "requirements.txt",
+            "gas/Code.gs",
         ],
         "version_file": "VERSION",
         "version_key": "plugin version",
@@ -175,11 +191,22 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
         if action == "start_copy":
             return self._start_copy(db_type, item_data)
         if action == "cancel_copy":
-            return cancel_current_job()
+            return self._cancel_copy(db_type)
         if action == "list_remotes":
             return self._list_remotes(item_data)
 
         return False, "지원하지 않는 action입니다: %s" % action
+
+    def _cancel_copy(self, db_type):
+        """백엔드(rclone/gas)에 따라 중단 처리 방식이 다르므로 여기서 분기한다.
+        rclone은 PID에 시그널을 보내고, GAS는 웹앱에 중단을 요청한다."""
+        state = read_raw_state()
+        if not state:
+            return False, "진행 중인 복사 작업이 없습니다."
+        if state.get("backend") == "gas":
+            config = self._get_config(db_type)
+            return cancel_gas_job(state, config.get("GAS_WEBAPP_URL"), config.get("GAS_SHARED_SECRET"))
+        return cancel_current_job()
 
     def _list_remotes(self, item_data):
         """설정 화면(settings.js)이 RCLONE_REMOTE 풀다운을 채울 때 호출.
@@ -193,6 +220,43 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
         return True, json.dumps({"remotes": remotes})
 
     def _start_copy(self, db_type, item_data):
+        method = str(item_data.get("method", "rclone")).strip().lower()
+        if method == "gas":
+            return self._start_gas_copy(db_type, item_data)
+        return self._start_rclone_copy(db_type, item_data)
+
+    def _start_gas_copy(self, db_type, item_data):
+        """GAS 방식은 목적지도 (마운트 경로가 아니라) 구글 드라이브 폴더
+        URL/ID이므로, rclone 방식과 별도 경로로 분기한다 (마운트 경로
+        변환을 적용하지 않음)."""
+        source_url = str(item_data.get("source_url", "")).strip()
+        dest_input = str(item_data.get("dest_folder_name", "")).strip()
+
+        if not source_url:
+            return False, "소스 폴더 URL(또는 ID)을 입력해주세요."
+        if not dest_input:
+            return False, "목적지 폴더 URL(또는 ID)을 입력해주세요."
+
+        config = self._get_config(db_type)
+        webapp_url = config.get("GAS_WEBAPP_URL")
+        if not webapp_url:
+            return False, "GAS_WEBAPP_URL이 설정되지 않았습니다. 설정 화면에서 먼저 저장해주세요."
+
+        try:
+            start_gas_job(
+                webapp_url=webapp_url,
+                secret=config.get("GAS_SHARED_SECRET"),
+                source_folder_url=source_url,
+                dest_folder_url=dest_input,
+                source_url_input=source_url,
+                dest_input=dest_input,
+            )
+        except (ValueError, RuntimeError) as e:
+            return False, str(e)
+
+        return True, "Google Apps Script로 복사를 시작했습니다. (구글 서버에서 처리 중 - 이 화면을 닫아도 계속 진행됩니다)"
+
+    def _start_rclone_copy(self, db_type, item_data):
         source_url = str(item_data.get("source_url", "")).strip()
         dest_input = str(item_data.get("dest_folder_name", "")).strip()
 
@@ -237,6 +301,10 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
         configured = bool(config.get("RCLONE_PATH") and config.get("CONFIG_PATH") and config.get("RCLONE_REMOTE"))
         mount_prefix = resolve_mount_prefix(config.get("MOUNT_PREFIX"), config.get("RCLONE_REMOTE"))
 
+        # 현재 job이 GAS 백엔드이고 아직 실행 중이면, 여기서 먼저 웹앱에
+        # 최신 상태를 물어봐서 job_state.json을 갱신한다 (get_last_job_status()는
+        # 이미 반영된 값을 읽기만 함 - 순서 중요).
+        maybe_refresh_gas_job(config.get("GAS_WEBAPP_URL"), config.get("GAS_SHARED_SECRET"))
         job = get_last_job_status()
 
         return {
@@ -247,6 +315,7 @@ class RcloneG2gCopyProvider(BaseMetadataProvider):
                 "rclone_remote": config.get("RCLONE_REMOTE"),
                 "mount_prefix": mount_prefix,
                 "discord_notify_enabled": bool(config.get("DISCORD_WEBHOOK_URL")),
+                "gas_configured": bool(config.get("GAS_WEBAPP_URL")),
                 # 설정 화면(settings.js)이 RCLONE_REMOTE를 풀다운으로 그릴 때 씀.
                 # CONFIG_PATH가 아직 저장 전이거나 파일을 못 찾으면 빈 리스트.
                 "available_remotes": list_rclone_remotes(config.get("CONFIG_PATH")),

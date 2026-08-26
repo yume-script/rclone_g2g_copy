@@ -15,6 +15,10 @@
   let lastJobStatus = null; // running | success | error | cancelled | null(아직 없음)
 
   const banner = container.querySelector('[data-role="config-banner"]');
+  const methodCheckbox = container.querySelector('[data-role="method-checkbox"]');
+  const methodToggleLabel = container.querySelector('[data-role="method-toggle-label"]');
+  const sourceLabel = container.querySelector('[data-role="source-label"]');
+  const destLabel = container.querySelector('[data-role="dest-label"]');
   const sourceInput = container.querySelector('[data-role="source-url"]');
   const destInput = container.querySelector('[data-role="dest-folder"]');
   const destPreview = container.querySelector('[data-role="dest-preview"]');
@@ -30,7 +34,32 @@
   const progressDetail = container.querySelector('[data-role="progress-detail"]');
 
   let mountPrefix = '';
+  let gasConfigured = false;
   let inputsPrefilled = false;
+
+  // 현재 선택된 백엔드. 체크박스가 켜져 있고 GAS_WEBAPP_URL이 설정돼 있을 때만
+  // 'gas', 그 외엔 항상 'rclone' (기본값 - 하위 호환).
+  function currentMethod() {
+    return methodCheckbox.checked && gasConfigured ? 'gas' : 'rclone';
+  }
+
+  function updateMethodUI() {
+    const method = currentMethod();
+    if (method === 'gas') {
+      sourceLabel.textContent = '소스 폴더 (구글 드라이브 URL 또는 폴더 ID)';
+      destLabel.textContent = '목적지 폴더 (구글 드라이브 URL 또는 폴더 ID)';
+      destInput.placeholder = 'https://drive.google.com/drive/folders/xxxxxxxxxxxx';
+      destPreview.textContent = ''; // GAS 모드에서는 마운트 경로 변환 미리보기가 의미 없음
+      destPreview.removeAttribute('data-state');
+    } else {
+      sourceLabel.textContent = '소스 폴더 (구글 드라이브 URL 또는 폴더 ID)';
+      destLabel.textContent = '목적지 경로 (도커/호스트 마운트 경로 또는 rclone 기준 상대 경로 둘 다 입력 가능)';
+      destInput.placeholder = '/mnt/zeeps_member/zeepsmember/공유_폴더명 또는 /zeepsmember/공유_폴더명';
+      updateDestPreview();
+    }
+  }
+
+  methodCheckbox.addEventListener('change', updateMethodUI);
 
   // 폴링 주기. 이 프레임워크는 요청마다 플러그인 모듈을 새로 로드하는
   // 구조라(README 참고), 폴링이 잦을수록 서버 부하가 커진다. 그래서:
@@ -86,12 +115,24 @@
   function renderConfigBanner(cfg) {
     if (!cfg) return;
     mountPrefix = cfg.mount_prefix || '';
-    updateDestPreview();
+
+    gasConfigured = !!cfg.gas_configured;
+    if (gasConfigured) {
+      methodToggleLabel.removeAttribute('data-disabled');
+      methodCheckbox.disabled = false;
+    } else {
+      methodToggleLabel.setAttribute('data-disabled', 'true');
+      methodCheckbox.disabled = true;
+      methodCheckbox.checked = false; // GAS 설정이 없으면 강제로 rclone으로
+    }
+    updateMethodUI();
+
     if (cfg.configured) {
       banner.setAttribute('data-state', 'ok');
       const discordNote = cfg.discord_notify_enabled ? ' · 디스코드 알림 켜짐' : '';
+      const gasNote = gasConfigured ? ' · GAS 사용 가능' : '';
       banner.textContent =
-        `설정 완료 · remote: ${cfg.rclone_remote} · rclone: ${cfg.rclone_path} · 마운트 접두사: ${cfg.mount_prefix}${discordNote}`;
+        `설정 완료 · remote: ${cfg.rclone_remote} · rclone: ${cfg.rclone_path} · 마운트 접두사: ${cfg.mount_prefix}${discordNote}${gasNote}`;
     } else {
       banner.setAttribute('data-state', 'missing');
       banner.textContent =
@@ -136,6 +177,8 @@
     startBtn.disabled = isRunning;
     cancelBtn.hidden = !isRunning;
     cancelBtn.disabled = false;
+    // 실행 중에는 방식을 바꿔봐야 이번 job에는 적용이 안 되니 혼란 방지 차원에서 잠금
+    methodCheckbox.disabled = isRunning || !gasConfigured;
   }
 
   function formatProgressDetail(progress) {
@@ -204,7 +247,10 @@
       if (job.dest_input && !destInput.value) {
         destInput.value = job.dest_input;
       }
-      updateDestPreview();
+      // 이 job이 실제로 어느 백엔드로 시작됐는지에 맞춰 체크박스도 복원
+      // (예: GAS로 시작한 job이 진행 중일 때 새로고침해도 체크 상태 유지)
+      methodCheckbox.checked = job.backend === 'gas';
+      updateMethodUI();
     }
     logDest.textContent = job.dest_path ? `→ ${job.dest_path}` : '';
     appendLines(job.lines);
@@ -316,6 +362,7 @@
 
     callApply({
       action: 'start_copy',
+      method: currentMethod(),
       source_url: sourceUrl,
       dest_folder_name: destFolder,
     })

@@ -62,6 +62,39 @@
   margin-bottom: 14px;
 }
 
+.rgc-method-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bo-text-primary, #fff);
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.rgc-method-toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.rgc-method-toggle[data-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rgc-method-toggle[data-disabled='true'] input {
+  cursor: not-allowed;
+}
+
+.rgc-field-hint {
+  margin: 4px 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bo-text-secondary, #9a9a9a);
+}
+
 .rgc-field {
   margin-bottom: 12px;
 }

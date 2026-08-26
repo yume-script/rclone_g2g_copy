@@ -14,6 +14,78 @@
 - **카테고리탭(사이드바 전체 화면, index.html)**: 소스 폴더(URL/ID), 목적지 경로,
   [복사 시작]/[중단] 버튼, 실시간 로그.
 
+## 백엔드 선택: rclone vs Google Apps Script
+
+카테고리탭 화면 상단에 **"Google Apps Script로 복사 (rclone 대신)"** 체크박스가
+있습니다. 설정에서 `GAS_WEBAPP_URL`을 입력해야 활성화되고, 기본은 항상
+rclone입니다(체크 안 하면 예전과 완전히 동일하게 동작 — 하위 호환).
+
+**왜 두 번째 백엔드가 필요한가**: rclone 방식은 지금 겪으신 것처럼
+rclone.conf 저장 실패(도커 볼륨 마운트 이슈, 아래 별도 항목 참고) 같은
+인프라 문제가 있을 수 있고, BookOasis 서버의 CPU/메모리를 씁니다. Google
+Apps Script(GAS) 방식은 복사 작업 자체가 **전적으로 구글 인프라 안에서**
+실행되므로 이런 문제가 원천적으로 없고, 서버 리소스도 전혀 안 씁니다. 대신
+Apps Script 특유의 제약(아래 설명)이 있어 상황에 따라 선택할 수 있게
+체크박스로 만들었습니다.
+
+### 설계: 기존 UI를 그대로 재사용
+
+GAS 방식은 로컬에 백그라운드 프로세스(PID)가 없습니다 — 실제 복사는 Apps
+Script의 **시간기반 트리거**가 구글 서버 안에서 처리하고, BookOasis 서버는
+그 웹앱에 상태를 물어보기만(polling) 합니다. 그래서 지금까지 만든 진행률
+바/로그/중단 버튼을 **하나도 새로 안 만들고 그대로 재사용**하도록, GAS
+상태를 기존 `job_state.json` 형식에 매핑했습니다:
+
+- `gas_logic.py`가 `start_gas_job()` / `refresh_gas_status()` /
+  `cancel_gas_job()`을 제공하고, `rclone_g2g_copy.py`가 `job_state.json`의
+  `backend` 필드(`"rclone"` 또는 `"gas"`)를 보고 시작/중단을 분기합니다.
+- **백그라운드 스레드가 필요 없습니다.** `get_dashboard_data()`가 호출될
+  때마다(=사용자가 폴링할 때마다) `maybe_refresh_gas_job()`이 그 자리에서
+  웹앱에 최신 상태를 물어보고 `job_state.json`을 갱신합니다. 이 프레임워크가
+  요청마다 모듈을 새로 로드하는 특성과 오히려 잘 맞습니다 — 어느 모듈
+  인스턴스가 요청을 받아도 그 순간 바로 최신 정보를 다시 받아오면 되므로,
+  rclone 백엔드에서 겪었던 "백그라운드 스레드가 orphan되는" 문제 자체가
+  생기지 않습니다.
+- 목적지 입력값도 다릅니다: rclone은 마운트 경로/rclone 상대경로를
+  받지만, GAS는 **구글 드라이브 폴더 URL/ID**를 그대로 받습니다 (체크박스를
+  켜면 화면의 라벨/placeholder가 자동으로 바뀝니다).
+
+Python 쪽(`gas_logic.py`, `rclone_g2g_copy.py`의 분기 로직)은
+`urllib.request.urlopen`을 모킹해서 시작/진행률 갱신/연속 실패 시 error 처리/
+취소까지 전부 유닛테스트했고, 체크박스 UI(`script.js`)도 jsdom으로
+미설정/설정됨/새로고침 시 상태 복원 세 시나리오를 검증했습니다. **다만
+`gas/Code.gs`(실제 Apps Script 코드) 자체는 이 환경에 Google API 실행
+수단이 없어서 직접 테스트하지 못했습니다** — 아래 배포 방법대로 설치하신
+뒤 작은 테스트 폴더로 먼저 확인해주세요.
+
+### gas/Code.gs 배포 방법
+
+1. https://script.google.com 에서 새 프로젝트 생성
+2. `gas/Code.gs` 파일 내용을 그대로 붙여넣기 (Advanced Drive Service 추가 불필요 — 기본 내장 `DriveApp`만 사용)
+3. 상단의 `SHARED_SECRET` 상수를 아무 임의의 긴 문자열로 변경
+4. 배포 > 새 배포 > 유형: 웹 앱
+   - 실행 계정: 나
+   - 액세스 권한이 있는 사용자: 아무나 (BookOasis 서버가 구글 계정으로 로그인할 방법이 없어 익명 접근이 필요 — 대신 `SHARED_SECRET`으로 보호)
+5. 최초 배포 시 "권한 검토"에서 내 드라이브 접근 권한 승인
+6. 배포된 웹 앱 URL(`.../exec`로 끝남)을 BookOasis 설정의 `GAS_WEBAPP_URL`에,
+   3번에서 정한 문자열을 `GAS_SHARED_SECRET`에 각각 붙여넣기
+
+### GAS 방식의 제약
+
+- **실행시간 6분 제한**: Apps Script는 한 번 실행에 6분(개인 계정)까지만
+  돌 수 있습니다. `Code.gs`는 4.5분이 지나면 지금까지 진행 상황(폴더 스택
+  기반 체크포인트)을 저장하고 멈춘 뒤, 1분마다 도는 트리거가 이어받아
+  계속합니다 — 재귀 호출 대신 스택 기반 순회를 쓴 이유이기도 합니다.
+- **파일개수 기준 진행률만 제공**: 전체 용량을 미리 세지 않으므로(대용량
+  폴더에서 목록 조회 자체가 오래 걸릴 수 있어 생략) rclone처럼 바이트 기준
+  퍼센트/속도/ETA는 없고, "몇 개 중 몇 개 완료"만 보여줍니다.
+- **동시 1건 제한은 동일**하게 적용됩니다 (rclone과 마찬가지로 웹앱 쪽과
+  BookOasis 쪽 양쪽에서 확인).
+- 중단 요청은 **다음 체크포인트(최대 1분 이내)** 에서만 반영됩니다 —
+  즉시 멈추지 않습니다.
+- PropertiesService 용량 제한(전체 500KB) 때문에 로그는 최근 30줄만
+  보존됩니다 (rclone 백엔드의 로그 상한과 동일한 정신).
+
 ## 새로고침 시 입력창 복원
 
 `job_state.json`에 사용자가 실제로 타이핑했던 **원본 값**(`source_url_input`,
@@ -262,10 +334,12 @@ rclone_g2g_copy/
   __init__.py          # provider 노출
   rclone_g2g_copy.py    # BaseMetadataProvider 계약 (search/apply/get_dashboard_data) + category_tab
   logic.py               # rclone 실행/파일 기반 job 상태 관리/중단(PID kill)/rclone.conf 파싱/디스코드 알림
-  settings.html            # 설정 모달 - RCLONE_PATH/CONFIG_PATH/RCLONE_REMOTE(풀다운)/MOUNT_PREFIX/DISCORD_WEBHOOK_URL
+  gas_logic.py            # Google Apps Script 웹앱 통신 (시작/상태갱신/취소) - 대체 백엔드
+  gas/Code.gs              # Apps Script 소스 (script.google.com에 붙여넣어 배포)
+  settings.html            # 설정 모달 - RCLONE_PATH/CONFIG_PATH/RCLONE_REMOTE(풀다운)/MOUNT_PREFIX/DISCORD_WEBHOOK_URL/GAS_*
   settings.css              # 설정 모달 스타일
   settings.js                # RCLONE_REMOTE 풀다운 채우기 (rclone.conf 자동 조회)
-  index.html                  # 카테고리탭 전체 화면 - 실행 폼 + 로그 + 중단 버튼
+  index.html                  # 카테고리탭 전체 화면 - 실행 폼(rclone/GAS 토글) + 로그 + 중단 버튼
   style.css                    # 카테고리탭 화면 스타일
   script.js                     # 카테고리탭 화면 동작
   requirements.txt               # 빈 파일 (외부 pip 의존성 없음 - unified_book 규칙대로 패키지명만 적는 파일)
@@ -276,8 +350,11 @@ rclone_g2g_copy/
 실행 중 생성되는 데이터 (코드와 별도 경로, 업데이트해도 보존):
 ```
 ./plugins/data/rclone_g2g_copy/
-  job_state.json   # {job_id, status, pid, cancel_requested, returncode, started_at, finished_at, source_id, dest_path}
-  job.log           # rclone --progress 출력 (한 줄씩)
+  job_state.json   # {job_id, status, backend("rclone"|"gas"), pid, cancel_requested, returncode,
+                    #  started_at, finished_at, source_id, dest_path, progress, ...
+                    #  (GAS job은 추가로 gas_job_id/gas_log_lines/gas_refresh_failures)}
+  job.log           # rclone --progress 출력 (한 줄씩) - GAS job의 로그는 job_state.json의
+                    # gas_log_lines에 직접 저장됨 (별도 파일 없음)
 ```
 
 ## !! 확인 필요한 부분 (실제 서버에서 검증 필요) !!
@@ -293,3 +370,16 @@ rclone_g2g_copy/
    앱이 어디서 실행되든 항상 리포지토리/컨테이너 루트가 cwd라는 전제인데, 실제로
    다른 위치에서 기동된다면 엉뚱한 곳에 파일이 생길 수 있습니다. 그 경로에 쓰기
    권한이 있는지도 함께 확인 부탁드립니다 (안 되면 로그가 전혀 안 쌓일 수 있음).
+5. **`gas/Code.gs`는 실제 Google Apps Script/Drive API 환경에서 직접 실행해
+   검증하지 못했습니다.** `gas_logic.py`(BookOasis 쪽 HTTP 통신 로직)는
+   `urllib.request.urlopen`을 모킹해서 시작/진행률/실패/취소 시나리오를
+   전부 유닛테스트했지만, `Code.gs` 자체가 그 계약대로 정확히 동작하는지는
+   이 환경에서 확인할 방법이 없었습니다. 배포 후 작은 테스트 폴더(파일
+   몇 개짜리)로 먼저 검증해보시고, 문제가 있으면 오류 메시지와 함께
+   알려주시면 바로 고쳐드리겠습니다. 특히 아래는 눈여겨봐 주세요:
+   - `doPost(e)`/`doGet(e)`이 실제 배포 환경에서 기대한 형식으로 요청을
+     받는지 (Apps Script 웹앱의 `e.postData.contents` 파싱)
+   - 6분 실행시간 제한에 걸리기 전에 상태 저장이 제때 이루어지는지
+     (파일이 아주 많은 폴더로 테스트 시)
+   - `ScriptApp.newTrigger`로 만든 시간기반 트리거가 정상적으로 재개/정리되는지
+     (Apps Script 프로젝트의 "트리거" 메뉴에서 좀비 트리거가 남아있지 않은지 확인)

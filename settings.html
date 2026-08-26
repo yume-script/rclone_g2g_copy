@@ -147,4 +147,44 @@
       (파일 개수가 많은 폴더를 복사할 때 특히 효과적).
     </p>
   </div>
+
+  <p class="rgc-settings-desc" style="margin-top: 24px;">
+    <strong>Google Apps Script 방식 (선택)</strong> — rclone 대신, 별도로 배포한
+    Google Apps Script 웹앱이 구글 서버 안에서 복사를 처리하도록 할 수 있습니다.
+    카테고리탭 화면에 "Google Apps Script로 복사" 체크박스가 나타나며, 아래
+    URL을 입력해야 활성화됩니다. 배포 방법은 플러그인 폴더의
+    <code>gas/Code.gs</code> 상단 주석을 참고하세요.
+  </p>
+
+  <div class="rgc-field">
+    <label for="rgc-gas-webapp-url">GAS_WEBAPP_URL (선택)</label>
+    <input
+      type="text"
+      id="rgc-gas-webapp-url"
+      name="GAS_WEBAPP_URL"
+      placeholder="https://script.google.com/macros/s/xxxxxxxx/exec"
+      autocomplete="off"
+    />
+    <p class="rgc-field-hint">
+      script.google.com에서 <code>gas/Code.gs</code>를 배포한 뒤 나오는 웹 앱
+      URL(.../exec로 끝남)입니다. 비워두면 GAS 방식 자체가 비활성화됩니다.
+    </p>
+  </div>
+
+  <div class="rgc-field">
+    <label for="rgc-gas-secret">GAS_SHARED_SECRET (선택)</label>
+    <input
+      type="password"
+      id="rgc-gas-secret"
+      name="GAS_SHARED_SECRET"
+      placeholder="아무 임의의 긴 문자열"
+      autocomplete="off"
+    />
+    <p class="rgc-field-hint">
+      <code>gas/Code.gs</code> 상단의 <code>SHARED_SECRET</code> 상수와
+      <strong>정확히 동일한 값</strong>을 입력해야 합니다. 웹앱이 익명 접근
+      허용으로 배포되므로, 이 비밀키가 없으면 URL만 알면 누구나 내 드라이브
+      파일을 복사시킬 수 있습니다.
+    </p>
+  </div>
 </div>

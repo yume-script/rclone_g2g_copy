@@ -560,11 +560,21 @@ def get_last_job_status():
     if state is None:
         return None
 
-    # status가 "running"인데 실제 프로세스가 죽어있으면(예: 컨테이너
-    # 재시작으로 스레드 자체가 사라진 경우) 좀비 상태로 영원히 "진행 중"으로
-    # 보이는 것을 막기 위해 여기서 정리한다. 단, job을 막 시작해서 아직
-    # pid가 기록되기 전(Popen 호출 직전)일 수 있으므로 시작 직후 몇 초간은
-    # 봐준다.
+    if state.get("backend") == "gas":
+        # GAS 백엔드는 로컬 프로세스가 없어 아래의 pid 기반 좀비 체크가
+        # 적용되지 않는다. 최신 상태로 갱신하는 일은(웹앱에 물어보기)
+        # gas_logic.maybe_refresh_gas_job()이 get_dashboard_data() 안에서
+        # 이 함수보다 먼저 호출되어 담당하므로, 여기서는 이미 반영된
+        # state를 프론트가 기대하는 형태(lines 키 포함)로만 맞춰 반환한다.
+        result = dict(state)
+        result["lines"] = state.get("gas_log_lines", [])
+        return result
+
+    # rclone 백엔드: status가 "running"인데 실제 프로세스가 죽어있으면
+    # (예: 컨테이너 재시작으로 스레드 자체가 사라진 경우) 좀비 상태로
+    # 영원히 "진행 중"으로 보이는 것을 막기 위해 여기서 정리한다. 단,
+    # job을 막 시작해서 아직 pid가 기록되기 전(Popen 호출 직전)일 수
+    # 있으므로 시작 직후 몇 초간은 봐준다.
     just_started = (time.time() - (state.get("started_at") or 0)) < 5
     if state.get("status") == "running" and not state.get("pid") and just_started:
         pass  # 아직 pid 기록 전 - 정상, 다음 폴링 때 다시 확인
@@ -579,3 +589,10 @@ def get_last_job_status():
     result = dict(state)
     result["lines"] = _read_log_lines()
     return result
+
+
+def read_raw_state():
+    """job_state.json을 가공 없이 그대로 읽는다 (백엔드 판별 등에 사용).
+    get_last_job_status()와 달리 좀비 체크나 로그 파일 읽기 같은 부가 처리를
+    하지 않는, 가벼운 조회용."""
+    return _read_state()
