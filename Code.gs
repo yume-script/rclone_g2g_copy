@@ -12,6 +12,14 @@
  * script.google.com에 붙여넣고 실행/배포하신 뒤, 작은 테스트 폴더로 먼저
  * 검증해보시고 문제가 있으면 알려주세요 - 바로 고쳐드리겠습니다.
  *
+ * !! 중단/재실행해도 중복 파일이 안 생기는 이유 !!
+ * 6분 실행시간 제한을 넘겨 다음 트리거로 이어지거나, 사용자가 중단한 뒤 새로
+ * 시작하는 경우 모두 대비해, 파일/폴더를 만들기 전에 항상 목적지에 같은
+ * 이름(+파일은 용량까지)의 것이 이미 있는지 확인하고 있으면 건너뜁니다
+ * (findExistingFile / findOrCreateDestFolder 참고). rclone copy의 기본
+ * 동작(이미 있는 파일은 다시 안 옮김)과 같은 원리라, 언제 다시 실행되든
+ * 이미 끝난 부분은 건너뛰고 안 끝난 부분만 채워 넣습니다.
+ *
  * ===================== 배포 방법 =====================
  * 1. https://script.google.com 에서 새 프로젝트 생성
  * 2. 이 파일 내용을 Code.gs에 그대로 붙여넣기
@@ -199,6 +207,33 @@ function handleCancel(body) {
 // ---------------------------------------------------------------------------
 // 실제 복사 작업 (시간기반 트리거가 주기적으로 호출)
 // ---------------------------------------------------------------------------
+//
+// !! 중복 파일/폴더 방지 !!
+// 두 경로로 중복이 생길 수 있어서(1: 6분 실행시간을 넘겨 다음 트리거로 이어질
+// 때 이미 복사한 파일을 다시 순회, 2: 중단 후 새로 시작하면 처음부터 전체를
+// 다시 복사), rclone의 기본 동작과 동일하게 "목적지에 이미 같은 파일/폴더가
+// 있으면 건너뛰기"를 매번 확인한다. 이러면 어느 시점에 다시 실행되든(트리거
+// 재개든, 취소 후 재시작이든) 결과적으로 멱등(idempotent)해진다 - 이미 복사된
+// 건 건너뛰고 안 된 것만 채워 넣는다.
+//
+// 이름이 같아도 다른 파일일 수 있으니(구글 드라이브는 같은 폴더 안에 동명
+// 파일 허용), 이름 + 용량(byte 크기)이 모두 같을 때만 "이미 복사됨"으로
+// 판단한다 (내용 해시까지는 비교하지 않음 - 완벽하진 않지만 실용적인 선).
+
+function findExistingFile(destFolder, name, size) {
+  var it = destFolder.getFilesByName(name);
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.getSize() === size) return f;
+  }
+  return null;
+}
+
+function findOrCreateDestFolder(destParent, name) {
+  var it = destParent.getFoldersByName(name);
+  if (it.hasNext()) return it.next(); // 이미 있으면 재사용 (중복 폴더 생성 방지)
+  return destParent.createFolder(name);
+}
 
 function continueJob() {
   var job = readJob();
@@ -230,30 +265,41 @@ function continueJob() {
       var srcFolder = DriveApp.getFolderById(top.src);
       var destFolder = DriveApp.getFolderById(top.dest);
 
-      // -- 파일 복사 (이 폴더 레벨의 파일들) --
+      // -- 파일 복사 (이 폴더 레벨의 파일들, 이미 있는 건 건너뜀) --
       var files = srcFolder.getFiles();
       var processedAnyFile = false;
+      var skippedCount = 0;
       while (files.hasNext()) {
         if (new Date().getTime() - startTime > TIME_BUDGET_MS) {
           writeJob(job);
           return;
         }
         var file = files.next();
-        file.makeCopy(file.getName(), destFolder); // 서버사이드 복사 (다운로드/업로드 없음)
+        var existing = findExistingFile(destFolder, file.getName(), file.getSize());
+        if (!existing) {
+          file.makeCopy(file.getName(), destFolder); // 서버사이드 복사 (다운로드/업로드 없음)
+        } else {
+          skippedCount += 1;
+        }
         job.files_done += 1;
         processedAnyFile = true;
       }
       if (processedAnyFile) {
-        appendLog(job, top.src + ' 폴더의 파일 복사 완료 (누적 ' + job.files_done + '개)');
+        var msg = top.src + ' 폴더 처리 완료 (누적 ' + job.files_done + '개)';
+        if (skippedCount > 0) {
+          msg += ' - 이미 있어서 건너뜀 ' + skippedCount + '개';
+        }
+        appendLog(job, msg);
         writeJob(job); // 파일 몇 개 처리할 때마다는 아니고, 한 폴더 끝날 때마다 저장(과도한 쓰기 방지)
       }
 
-      // -- 하위 폴더 순회 (DFS - 스택에 쌓기) --
+      // -- 하위 폴더 순회 (DFS - 스택에 쌓기, 목적지에 이미 같은 이름 폴더가
+      //    있으면 새로 안 만들고 재사용) --
       var subfolders = srcFolder.getFolders();
       var pushedAny = false;
       while (subfolders.hasNext()) {
         var subfolder = subfolders.next();
-        var newDest = destFolder.createFolder(subfolder.getName());
+        var newDest = findOrCreateDestFolder(destFolder, subfolder.getName());
         job.folder_stack.push({ src: subfolder.getId(), dest: newDest.getId() });
         pushedAny = true;
       }
