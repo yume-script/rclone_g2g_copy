@@ -13,8 +13,11 @@
 
   <div class="rgc-card">
     <label class="rgc-method-toggle" data-role="method-toggle-label">
-      <input type="checkbox" data-role="method-checkbox" />
-      <span>Google Apps Script로 복사 (rclone 대신)</span>
+      <span class="rgc-switch">
+        <input type="checkbox" data-role="method-checkbox" />
+        <span class="rgc-switch-slider"></span>
+      </span>
+      <span class="rgc-method-toggle-text">Google Apps Script로 복사 (rclone 대신)</span>
     </label>
     <p class="rgc-field-hint" data-role="method-hint">
       기본은 rclone(서버 프로세스)입니다. 체크하면 별도로 배포한 Google Apps
@@ -65,7 +68,7 @@
 
   <div class="rgc-log-card">
     <div class="rgc-log-head">
-      <span>실행 로그</span>
+      <span class="rgc-log-head-title">실행 로그</span>
       <span class="rgc-log-dest" data-role="log-dest"></span>
     </div>
     <pre class="rgc-log-box" data-role="log-box">복사를 시작하면 이곳에 진행 상황이 표시됩니다.</pre>

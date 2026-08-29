@@ -14,6 +14,22 @@
 - **카테고리탭(사이드바 전체 화면, index.html)**: 소스 폴더(URL/ID), 목적지 경로,
   [복사 시작]/[중단] 버튼, 실시간 로그.
 
+## 디자인이 plugin_board(플러그인게시판)와 한 세트로 보이는 이유
+
+`style.css`/`settings.css`는 하드코딩 색상 대신 `plugin_board`(플러그인게시판)의
+`style.css`와 **동일한 전역 CSS 변수**(`var(--app-bg-card)`, `var(--app-text-primary)`,
+`var(--app-accent)` 등)를 씁니다. 이 변수들이 8종 대시보드 테마(purple/dark/
+light/sepia/blue/aquamarine/ironman/epaper)와 자동으로 동기화되는 걸로 확인돼서,
+사용자가 테마를 바꾸면 이 플러그인 화면도 plugin_board와 똑같이 같이 바뀝니다
+(예전 버전은 `var(--bo-*)`라는, 실제 앱에 없는 추정 변수명을 썼었습니다 -
+plugin_board의 실제 style.css를 받아서 확인 후 전부 `--app-*`로 교체함).
+
+시각적으로도 맞췄습니다: 카드(`border-radius: 10px`, `var(--app-bg-card)` 배경),
+버튼([복사 시작]/[중단]은 `color-mix(in srgb, var(--app-accent) ...)` 톤의
+필 스타일), 방식 선택(rclone/GAS) 체크박스는 plugin_board의 활성화 토글
+스위치와 동일한 모양으로 교체, 성공/실패 배지 색도 plugin_board가 쓰는 것과
+같은 톤(`#4f9d76` 성공 / `#c0554f` 위험)으로 통일했습니다.
+
 ## 백엔드 선택: rclone vs Google Apps Script
 
 카테고리탭 화면 상단에 **"Google Apps Script로 복사 (rclone 대신)"** 체크박스가
@@ -69,6 +85,33 @@ Python 쪽(`gas_logic.py`, `rclone_g2g_copy.py`의 분기 로직)은
 5. 최초 배포 시 "권한 검토"에서 내 드라이브 접근 권한 승인
 6. 배포된 웹 앱 URL(`.../exec`로 끝남)을 BookOasis 설정의 `GAS_WEBAPP_URL`에,
    3번에서 정한 문자열을 `GAS_SHARED_SECRET`에 각각 붙여넣기
+
+### 배포가 잘 됐는지 BookOasis 없이 바로 확인하기 (curl)
+
+```bash
+curl -sL --post302 --post303 -X POST "웹앱URL" \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"SHARED_SECRET값","action":"status","job_id":"x"}'
+```
+정상이면 `{"success":false,"error":"해당 job을 찾을 수 없습니다."}` 같은 **JSON**이
+돌아옵니다. `secret`을 일부러 틀리게 넣으면 `{"success":false,"error":"UNAUTHORIZED"}`가
+와야 정상입니다.
+
+**`--post302 --post303`가 꼭 필요한 이유**: GAS 웹앱은 POST 요청을 받으면
+항상 실제 결과가 있는 내부 URL로 302 리다이렉트를 한 번 거칩니다(정상 동작).
+그런데 `curl -L`은 기본적으로 301/302/303 리다이렉트를 따라갈 때 **POST를
+GET으로 바꾸고 요청 본문을 버리는** 옛날 HTTP 관행을 기본값으로 씁니다. 이
+옵션 없이 테스트하면 우리가 보낸 `secret`/`action`이 통째로 사라진 빈 GET
+요청만 GAS에 도착해서, `curl -sL`만 쓰면 반응이 없거나 "페이지를 찾을 수
+없음" 같은 엉뚱한 응답을 받게 됩니다 — **배포 자체는 멀쩡한데 이것 때문에
+안 되는 것처럼 보이는 경우가 실제로 있었습니다.**
+
+같은 문제가 Python `urllib.request`(BookOasis 쪽 실제 코드가 쓰는 것)의
+기본 동작에도 그대로 있었습니다 — `gas_logic.py`가 자체 리다이렉트 핸들러
+(`_PreservePostRedirectHandler`)로 이미 우회하도록 고쳐뒀습니다 (로컬 HTTP
+서버로 리다이렉트 상황을 직접 재현해서, POST 본문이 리다이렉트를 거쳐도
+그대로 유지되는지 검증 완료). curl로 위 명령이 정상 응답하면, BookOasis
+쪽도 정상적으로 통신될 것으로 예상됩니다.
 
 ### GAS 방식의 제약
 
@@ -420,14 +463,20 @@ rclone_g2g_copy/
    권한이 있는지도 함께 확인 부탁드립니다 (안 되면 로그가 전혀 안 쌓일 수 있음).
 5. **`gas/Code.gs`는 실제 Google Apps Script/Drive API 환경에서 직접 실행해
    검증하지 못했습니다.** `gas_logic.py`(BookOasis 쪽 HTTP 통신 로직)는
-   `urllib.request.urlopen`을 모킹해서 시작/진행률/실패/취소 시나리오를
-   전부 유닛테스트했지만, `Code.gs` 자체가 그 계약대로 정확히 동작하는지는
-   이 환경에서 확인할 방법이 없었습니다. 배포 후 작은 테스트 폴더(파일
-   몇 개짜리)로 먼저 검증해보시고, 문제가 있으면 오류 메시지와 함께
-   알려주시면 바로 고쳐드리겠습니다. 특히 아래는 눈여겨봐 주세요:
-   - `doPost(e)`/`doGet(e)`이 실제 배포 환경에서 기대한 형식으로 요청을
-     받는지 (Apps Script 웹앱의 `e.postData.contents` 파싱)
+   모킹으로 시작/진행률/실패/취소 시나리오를 전부 유닛테스트했고, **실제
+   배포된 웹앱과의 통신 자체는 curl로 직접 확인**했습니다 — 처음엔
+   `curl -sL`(리다이렉트에서 POST가 GET으로 바뀌는 걸 몰랐던 상태)로 테스트하다
+   "배포가 잘못된 것처럼" 보이는 상황을 겪었는데, 알고 보니 GAS 웹앱의 정상적인
+   302 릴레이를 curl/urllib 둘 다 기본 설정으로는 잘못 따라가서 POST 본문이
+   사라지는 문제였습니다 (위 "배포가 잘 됐는지 확인하기" 항목 참고).
+   `gas_logic.py`는 이미 자체 리다이렉트 핸들러로 고쳐뒀고, 로컬 HTTP 서버로
+   이 리다이렉트 상황 자체를 재현해서 POST 본문이 유지되는지도 검증했습니다.
+   다만 **`Code.gs`가 실제로 파일을 복사하는 로직 자체**(doPost 파싱, 6분
+   실행시간 제한 대응, 트리거 재개/정리)는 여전히 이 환경에서 실행해볼 방법이
+   없어 미검증 상태입니다. 작은 테스트 폴더로 먼저 검증해보시고, 문제가 있으면
+   오류 메시지와 함께 알려주시면 바로 고쳐드리겠습니다. 특히 아래는 눈여겨봐 주세요:
    - 6분 실행시간 제한에 걸리기 전에 상태 저장이 제때 이루어지는지
      (파일이 아주 많은 폴더로 테스트 시)
    - `ScriptApp.newTrigger`로 만든 시간기반 트리거가 정상적으로 재개/정리되는지
      (Apps Script 프로젝트의 "트리거" 메뉴에서 좀비 트리거가 남아있지 않은지 확인)
+

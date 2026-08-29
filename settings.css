@@ -1,9 +1,13 @@
+/* plugins/metadata/rclone_g2g_copy/settings.css
+   plugin_board의 환경설정 모달(.pb-field 계열)과 동일한 시각 언어로 맞췄습니다. */
+
 .rgc-settings-desc {
   margin: 0 0 16px;
-  color: var(--bo-text-secondary, #9a9a9a);
-  font-size: 13px;
+  color: var(--app-text-muted, #9ca3af);
+  font-size: 12.5px;
   line-height: 1.6;
 }
+
 .rgc-field {
   margin-bottom: 14px;
 }
@@ -11,56 +15,61 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 12.5px;
   font-weight: 600;
-  font-size: 13px;
-  color: var(--bo-text-primary, #fff);
+  color: var(--app-text-primary);
   margin-bottom: 4px;
 }
 .rgc-field input,
 .rgc-field select {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.15));
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
-  color: var(--bo-text-primary, #fff);
-  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.15));
+  background: var(--app-input-bg, var(--app-bg-main));
+  color: var(--app-text-primary);
+  font-size: 13.5px;
+  font-family: inherit;
+  letter-spacing: 0.02em;
 }
 .rgc-field-hint {
   margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--app-text-muted);
 }
 
 .rgc-refresh-btn {
-  font-weight: 400;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.15));
-  background: transparent;
-  color: var(--bo-text-secondary, #9a9a9a);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.18));
+  background: var(--app-bg-card);
+  color: var(--app-text-secondary, var(--app-text-muted));
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .rgc-refresh-btn:hover {
-  color: var(--bo-text-primary, #fff);
-  border-color: var(--bo-text-secondary, #9a9a9a);
+  background: var(--app-bg-card-hover);
+  color: var(--app-text-primary);
 }
 .rgc-refresh-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
+/* 리모트 목록 조회 상태 표시 - plugin_board의 상태색(성공/경고/오류)과 통일 */
 .rgc-field-hint[data-state="loading"] {
-  color: var(--bo-text-secondary, #9a9a9a);
+  color: var(--app-text-muted);
 }
 .rgc-field-hint[data-state="ok"] {
-  color: #4a7dff;
+  color: var(--app-accent);
 }
 .rgc-field-hint[data-state="empty"] {
-  color: #e7a13c;
+  color: color-mix(in srgb, #b9862f 90%, var(--app-text-primary));
 }
 .rgc-field-hint[data-state="error"] {
-  color: #e74c3c;
+  color: color-mix(in srgb, #c0554f 88%, var(--app-text-primary));
 }

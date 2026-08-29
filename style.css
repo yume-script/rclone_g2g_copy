@@ -1,98 +1,154 @@
+/* plugins/metadata/rclone_g2g_copy/style.css
+   plugin_board(플러그인게시판)의 style.css와 한 세트로 보이도록, 하드코딩 색상
+   대신 동일한 전역 CSS 변수(var(--app-*))를 쓰고 카드/버튼/토글스위치 등의
+   시각 언어를 맞췄습니다. 8종 대시보드 테마(purple/dark/light/sepia/blue/
+   aquamarine/ironman/epaper)와 자동으로 동기화됩니다. */
+
 .rgc-page {
-  padding: 16px;
+  padding: 4px 2px 32px;
   max-width: 760px;
+  font-family: inherit;
+  color: var(--app-text-primary, #e5e5e5);
 }
 
+/* ---------- 헤더 ---------- */
 .rgc-header {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  gap: 14px;
+  background: var(--app-bg-sidebar, var(--app-bg-card));
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  padding: 20px 24px 18px;
   margin-bottom: 14px;
 }
 
 .rgc-header-icon {
-  font-size: 28px;
-  line-height: 1;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: color-mix(in srgb, var(--app-accent) 88%, var(--app-text-primary));
+  background: color-mix(in srgb, var(--app-accent) 16%, transparent);
 }
 
 .rgc-header-text h2 {
-  margin: 0 0 4px;
-  font-size: 17px;
-  color: var(--bo-text-primary, #fff);
+  margin: 0 0 6px;
+  font-size: clamp(18px, 2.6vw, 22px);
+  font-weight: 700;
+  color: var(--app-text-primary);
 }
 
 .rgc-header-text p {
   margin: 0;
   font-size: 13px;
-  color: var(--bo-text-secondary, #9a9a9a);
-  line-height: 1.5;
+  line-height: 1.6;
+  color: var(--app-text-muted, #9ca3af);
 }
 
+/* ---------- 설정 상태 배너 ---------- */
 .rgc-config-banner {
   padding: 10px 14px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12.5px;
   margin-bottom: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--bo-text-secondary, #9a9a9a);
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  background: var(--app-bg-card);
+  color: var(--app-text-secondary, var(--app-text-muted));
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.1));
 }
 
 .rgc-config-banner[data-state="ok"] {
-  background: rgba(46, 204, 113, 0.12);
-  color: #2ecc71;
-  border-color: rgba(46, 204, 113, 0.3);
+  color: color-mix(in srgb, #4f9d76 88%, var(--app-text-primary));
+  border-color: color-mix(in srgb, #4f9d76 45%, transparent);
+  background: color-mix(in srgb, #4f9d76 12%, transparent);
 }
 
 .rgc-config-banner[data-state="missing"] {
-  background: rgba(231, 76, 60, 0.12);
-  color: #e74c3c;
-  border-color: rgba(231, 76, 60, 0.3);
+  color: color-mix(in srgb, #c0554f 88%, var(--app-text-primary));
+  border-color: color-mix(in srgb, #c0554f 45%, transparent);
+  background: color-mix(in srgb, #c0554f 12%, transparent);
 }
 
+/* ---------- 실행 카드 ---------- */
 .rgc-card {
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  background: var(--app-bg-card);
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  padding: 18px 20px 16px;
   margin-bottom: 14px;
 }
 
+/* 방식 토글 (rclone / GAS) - plugin_board 관리 행의 토글 스위치와 동일 패턴 */
 .rgc-method-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--bo-text-primary, #fff);
+  gap: 10px;
   cursor: pointer;
   margin-bottom: 4px;
 }
 
-.rgc-method-toggle input[type='checkbox'] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
+.rgc-method-toggle-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text-primary);
 }
 
-.rgc-method-toggle[data-disabled='true'] {
+.rgc-method-toggle[data-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.rgc-method-toggle[data-disabled='true'] input {
+.rgc-switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 19px;
+  flex-shrink: 0;
+}
+.rgc-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.rgc-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--app-border, rgba(255, 255, 255, 0.25));
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+.rgc-switch-slider::before {
+  content: "";
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+.rgc-switch input:checked + .rgc-switch-slider {
+  background: color-mix(in srgb, var(--app-accent) 65%, var(--app-text-muted) 35%);
+}
+.rgc-switch input:checked + .rgc-switch-slider::before {
+  transform: translateX(15px);
+}
+.rgc-switch input:disabled + .rgc-switch-slider {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .rgc-field-hint {
   margin: 4px 0 12px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--app-text-muted);
 }
 
 .rgc-field {
@@ -101,68 +157,79 @@
 
 .rgc-field label {
   display: block;
+  font-size: 12.5px;
   font-weight: 600;
-  font-size: 13px;
-  color: var(--bo-text-primary, #fff);
+  color: var(--app-text-primary);
   margin-bottom: 4px;
 }
 
 .rgc-field input {
   width: 100%;
   box-sizing: border-box;
-  padding: 9px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.15));
-  background: rgba(0, 0, 0, 0.15);
-  color: var(--bo-text-primary, #fff);
-  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.15));
+  background: var(--app-input-bg, var(--app-bg-main));
+  color: var(--app-text-primary);
+  font-size: 13.5px;
+  font-family: inherit;
 }
 
 .rgc-dest-preview {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: "SFMono-Regular", Consolas, monospace;
-  color: var(--bo-text-secondary, #9a9a9a);
+  color: var(--app-text-muted);
   min-height: 16px;
 }
 
 .rgc-dest-preview[data-state="converted"] {
-  color: #4a7dff;
+  color: var(--app-accent);
 }
 
+/* ---------- 버튼 ---------- */
 .rgc-start-btn {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--app-accent);
+  background: color-mix(in srgb, var(--app-accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-accent) 42%, transparent);
   padding: 9px 18px;
   border-radius: 8px;
-  border: none;
-  background: var(--bo-accent, #4a7dff);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
-
+.rgc-start-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--app-accent) 26%, transparent);
+  transform: translateY(-1px);
+}
 .rgc-start-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 .rgc-cancel-btn {
   margin-left: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: color-mix(in srgb, #c0554f 88%, var(--app-text-primary));
+  background: color-mix(in srgb, #c0554f 14%, transparent);
+  border: 1px solid color-mix(in srgb, #c0554f 45%, transparent);
   padding: 9px 18px;
   border-radius: 8px;
-  border: 1px solid rgba(231, 76, 60, 0.5);
-  background: rgba(231, 76, 60, 0.12);
-  color: #e74c3c;
-  font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
-
+.rgc-cancel-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, #c0554f 24%, transparent);
+}
 .rgc-cancel-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
-
 .rgc-cancel-btn[hidden] {
   display: none;
 }
@@ -172,30 +239,28 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--bo-text-secondary, #9a9a9a);
-  font-size: 12px;
+  color: var(--app-text-muted);
+  font-size: 11.5px;
   text-decoration: underline;
   cursor: pointer;
 }
-
 .rgc-reset-link:hover {
-  color: #e74c3c;
+  color: color-mix(in srgb, #c0554f 88%, var(--app-text-primary));
 }
-
 .rgc-reset-link[hidden] {
   display: none;
 }
 
 .rgc-status-text {
   margin-left: 10px;
-  font-size: 13px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 12.5px;
+  color: var(--app-text-secondary, var(--app-text-muted));
 }
 
+/* ---------- 진행률 ---------- */
 .rgc-progress-wrap {
-  margin-top: 12px;
+  margin-top: 14px;
 }
-
 .rgc-progress-wrap[hidden] {
   display: none;
 }
@@ -210,41 +275,42 @@
 .rgc-progress-percent {
   font-size: 22px;
   font-weight: 700;
-  color: var(--bo-text-primary, #fff);
+  color: var(--app-text-primary);
   font-variant-numeric: tabular-nums;
 }
 
 .rgc-progress-summary {
-  font-size: 12px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 11.5px;
+  color: var(--app-text-muted);
 }
 
 .rgc-progress-track {
   width: 100%;
   height: 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--app-border, rgba(255, 255, 255, 0.1));
   overflow: hidden;
 }
 
 .rgc-progress-fill {
   height: 100%;
   border-radius: 4px;
-  background: var(--bo-accent, #4a7dff);
+  background: var(--app-accent);
   transition: width 0.3s ease;
 }
 
 .rgc-progress-detail {
   margin-top: 6px;
-  font-size: 12px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  font-size: 11.5px;
+  color: var(--app-text-muted);
   font-family: "SFMono-Regular", Consolas, monospace;
 }
 
+/* ---------- 실행 로그 ---------- */
 .rgc-log-card {
-  border-radius: 12px;
-  border: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
-  background: var(--bo-surface, rgba(255, 255, 255, 0.04));
+  background: var(--app-bg-card);
+  border: 1px solid var(--app-border, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -252,28 +318,42 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--bo-text-primary, #fff);
-  border-bottom: 1px solid var(--bo-border-color, rgba(255, 255, 255, 0.1));
+  padding: 12px 18px;
+  border-bottom: 1px dashed var(--app-border-light, var(--app-border));
+}
+
+.rgc-log-head-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--app-text-primary);
 }
 
 .rgc-log-dest {
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--bo-text-secondary, #9a9a9a);
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--app-text-muted);
 }
 
 .rgc-log-box {
   margin: 0;
-  padding: 12px 14px;
+  padding: 14px 18px;
   max-height: 420px;
   overflow-y: auto;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--bo-text-secondary, #cfcfcf);
+  color: var(--app-text-secondary, var(--app-text-muted));
+  background: var(--app-bg-main);
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rgc-start-btn,
+  .rgc-cancel-btn,
+  .rgc-switch-slider,
+  .rgc-switch-slider::before,
+  .rgc-progress-fill {
+    transition: none;
+  }
 }
