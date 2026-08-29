@@ -6,7 +6,6 @@
 
 .rgc-page {
   padding: 4px 2px 32px;
-  max-width: 760px;
   font-family: inherit;
   color: var(--app-text-primary, #e5e5e5);
 }
